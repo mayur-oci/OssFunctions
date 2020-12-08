@@ -17,7 +17,7 @@ public class OssProducer {
     static String username = System.getenv().get("OCI_USER_ID");
     static String streamPoolId = System.getenv().get("STREAM_POOL_OCID");
     static String authToken = System.getenv().get("OCI_AUTH_TOKEN");
-    static String streamOrKafkaTopicName = System.getenv().get("REVIEWS_STREAM");
+    static String streamOrKafkaTopicName = System.getenv().get("REVIEWS_STREAM_OR_TOPIC_NAME");
     static ObjectMapper objectMapper = new ObjectMapper();
 
     public static boolean producer(ReviewReq review) {
@@ -28,17 +28,17 @@ public class OssProducer {
             ProducerRecord<String, String> record = new ProducerRecord<>(streamOrKafkaTopicName, UUID.randomUUID().toString(), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(review));
             producer.send(record, (md, ex) -> {
                 if (ex != null) {
-                    System.out.println("exception occurred in producer for review :"+record.value()
+                    System.err.println("exception occurred in producer for review :"+record.value()
                             + ", exception is " + ex);
                     ex.printStackTrace();
                 } else {
-                    System.out.println("Sent msg to " + md.partition() + " with offset " + md.offset() + " at " + md.timestamp());
+                    System.err.println("Sent msg to " + md.partition() + " with offset " + md.offset() + " at " + md.timestamp());
                 }
             });
             producer.flush();
             producer.close();
         } catch (Exception e) {
-            System.out.println("Error: exception " + e);
+            System.err.println("Error: exception " + e);
             return false;
         }
 

@@ -32,15 +32,6 @@ public class OssConsumer {
     }
 
     public boolean handleRequest(ReviewReq msg) {
-//        System.err.println(" In the consumer function " + msg);
-//        ReviewReq review = null;
-//        try {
-//            review = mapper.readValue(msg, ReviewReq.class);
-//        } catch (JsonProcessingException e) {
-//            e.printStackTrace();
-//        }
-//        System.err.println(" In the consumer function with pojo" + review);
-
         boolean isItGoodReview = analyseUserGeneratedContent(msg.getReviewContent());
         System.err.println(" returning "+ isItGoodReview);
         return ObjectStorageHandler.uploadReview(isItGoodReview, msg);
