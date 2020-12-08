@@ -72,3 +72,18 @@ curl -X POST \
 }"
 
 # KAFKA_HEAP_OPTS
+exit
+
+
+# for local fn testing
+OCI_OBJECT_STORAGE_NAMESPACE=intrandallbarnes
+GOOD_REVIEW_BUCKET_NAME=goodRevBucket
+BAD_REVIEWS_BUCKET_NAME=badRevBucket
+OCI_OBJECT_STORAGE_REGION=us-phoenix-1
+OCI_OSS_KAFKA_BOOTSTRAP_SERVERS=streaming.us-phoenix-1.oci.oraclecloud.com:9092
+OCI_TENANCY_NAME=intrandallbarnes
+OCI_USER_ID=mayur.raleraskar@oracle.com
+OCI_AUTH_TOKEN=2m{s4WTCXysp:o]tGx4K
+STREAM_POOL_OCID=ocid1.streampool.oc1.phx.amaaaaaauwpiejqactzuddgmegg42gkhwpz24wy6k7ka3n24nc52mpzqfvua
+REVIEWS_STREAM_OR_TOPIC_NAME=testnew
+UNPUBLISHBALE_WORD_LIST="bad1,bad2,bad3,bad4"

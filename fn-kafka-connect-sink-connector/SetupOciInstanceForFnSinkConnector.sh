@@ -1,5 +1,4 @@
-# This script needs root privileges
-    sudo bash
+
 
 # Disable firewall of OCI linux node for HTTP and other communication to node
     sestatus
@@ -15,6 +14,23 @@
 
 # Install git for fetching the code
     yum install -y git
+
+# Install Java
+    yum install -y yum java-1.8.0-openjdk-devel
+
+# Install docker
+    yum install -y yum-utils zip unzip
+    yum-config-manager --enable ol7_optional_latest
+    yum-config-manager --enable ol7_addons
+    yum install -y oraclelinux-developer-release-el7
+    yum-config-manager --enable ol7_developer
+    yum install -y docker-engine btrfs-progs btrfs-progs-devel
+    systemctl enable docker.service
+    systemctl start docker.service
+    #You can get information about docker using the following commands.
+    systemctl status docker.service
+    docker info
+    docker version    
 
 # Run dockerized Kafka Connector framework. Note we have yet not configured the FnSinkConnector worker.
     OCI_STREAM_USERNAME="$OCI_TENANCY_NAME/$OCI_USER_ID/$OCI_STREAM_POOL_ID"
@@ -68,5 +84,26 @@
       ${MOUNT_OCI_CONFIGS_IF_APPLICABLE} \
       kafka-connect-fn-sink:latest
 
+
+
+        curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
+        echo "Connector $FN_CONNECTOR_NAME deleted"
+
+        curl -X POST \
+          http://localhost:8082/connectors \
+          -H 'content-type: application/json' \
+          -d "{
+          \"name\": \"${FN_CONNECTOR_NAME}\",
+          \"config\": {
+            \"connector.class\": \"io.fnproject.kafkaconnect.sink.FnSinkConnector\",
+            \"tasks.max\": \"${OCI_STREAM_PARTITIONS_COUNT}\",
+            \"topics\": \"${OCI_STREAM_NAME}\",
+            \"ociRegionForFunction\": \"${OCI_CURRENT_REGION}\",
+            \"ociCompartmentIdForFunction\": \"${OCI_CMPT_ID}\",
+            \"functionAppName\": \"${FN_APP_NAME}\",
+            \"functionName\": \"${FN_CONSUMER_FUNCTION_NAME}\",
+            \"ociLocalConfig\": \"${HOME}\"
+          }
+        }"
 
 

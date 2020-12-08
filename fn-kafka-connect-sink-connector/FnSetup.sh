@@ -174,7 +174,7 @@
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
             FN_APP_NAME=fn_oss_app_test
-            OCI_SUBNETID_LIST_JSON=[\"$OCI_SUBNET_1\", \"$OCI_SUBNET_2\", \"$OCI_SUBNET_3\"]
+            OCI_SUBNETID_LIST_JSON=[\"$OCI_SUBNET_1\"]
             fn create app $FN_APP_NAME  --annotation oracle.com/oci/subnetIds=$OCI_SUBNETID_LIST_JSON
             TAIL_URL=tcp://logs5.papertrailapp.com:45170 #optional
             if [ ! -z "$TAIL_URL" ]; then
@@ -212,23 +212,23 @@
 
 #Create Compute Instance for running Kafka Oci Fn Sink Connector
         AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
-        echo availability-domain chosen for compute instance: $AVAILABILITY_DOMAIN
+        echo availability-domain chosen for compute instance: $AD
         
         COMPUTE_SHAPE='VM.Standard1.4'
         SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
         #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
-        ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaym3vkgeag7mn3csoxxvk6gdirryocsubuv2xvgefhi2wrwytp2gq'
+        ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaxdnx3den32vwplngpeu44zakw7lxup7vcdd3jmke4pfleaug3m6q'
         COMPUTE_OCID=$(oci compute instance launch \
-                            -c ${OCI_CMPT_ID} \
-                            --shape "${COMPUTE_SHAPE}" \
-                            --display-name FnSinkConnectorVM \
-                            --image-id ${ORALCE_LINUX_IMAGE_OCID} \
-                            --ssh-authorized-keys-file "${SSH_PUBLIC_KEY_LOCATION}" \
-                            --subnet-id ${OCI_SUBNET_1} \
-                            --availability-domain "${AD}" \
-                            --wait-for-state RUNNING \
-                            --query "data.id" \
-                            --raw-output) 
+                                -c ${OCI_CMPT_ID} \
+                                --shape "${COMPUTE_SHAPE}" \
+                                --display-name FnSinkConnectorVM \
+                                --image-id ${ORALCE_LINUX_IMAGE_OCID} \
+                                --ssh-authorized-keys-file "${SSH_PUBLIC_KEY_LOCATION}" \
+                                --subnet-id ${OCI_SUBNET_1} \
+                                --availability-domain "${AD}" \
+                                --wait-for-state RUNNING \
+                                --query "data.id" \
+                                --raw-output) 
         #Get the Public IP
         COMPUTE_PUBLIC_IP=$(oci compute instance list-vnics \
             --instance-id "${COMPUTE_OCID}" \
@@ -247,27 +247,41 @@
         rm -rf statements.json                        
 
         # transfer env values for docker
+        echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
+        echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} >> env.json
+        echo OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID} >> env.json
+        echo OCI_STREAM_NAME=${OCI_STREAM_NAME} >> env.json
+        echo OCI_STREAM_PARTITIONS_COUNT=${OCI_STREAM_PARTITIONS_COUNT} >> env.json
 
-        echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} > env.json
-        echo OCID_STREAM_POOL=${OCI_STREAM_POOL_ID} > env.json
-        echo OCI_USER_ID=${OCI_USER_ID} > env.json
-        echo OCI_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN} > env.json
-        echo OCI_STREAM_PARTITIONS_COUNT=${OCI_STREAM_PARTITIONS_COUNT} > env.json
+        echo OCI_USER_ID=${OCI_USER_ID} >> env.json
+        echo OCI_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN} >> env.json
 
+        echo FN_APP_NAME=${FN_APP_NAME} >> env.json
+        echo FN_CONSUMER_FUNCTION_NAME=review_consumer_fn >> env.json
+        echo FN_CONNECTOR_NAME="FnSinkConnector_2" >> env.json
 
         # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector
         export GIT_SETUP_EXPORTER="https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
         SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
         ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" \
                 "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
-        echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForLogExporter.sh' on the instance"
+        echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForFnSinkConnector.sh' on the instance"
 
-        ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no"
+        ssh -i sshkeypair1.key.pvt \
+                      -n opc@129.146.253.178 -o ServerAliveInterval=60 \
+                      -o "StrictHostKeyChecking no" \
+                      "export OCID_STREAM_POOL=100 | \
+                      sudo sh ~/test.sh"  > remoteMachine.txt
 
+
+
+exit 
+# ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no"
+# ssh -i sshkeypair1.key.pvt opc@129.146.253.178 "nohup sudo sh ~/test.sh > ~/test.txt&"
+# ssh -i sshkeypair1.key.pvt -n opc@129.146.253.178 "tail -f ~/test.txt" &
 
 
 #Start Kafka Fn Sink Connector worker 
-        FN_CONSUMER_FUNCTION_NAME=fn_oss_app_test
         OCI_STREAM_PARTITIONS_COUNT=1
         FN_CONSUMER_FUNCTION_NAME=review_consumer_fn
         FN_CONNECTOR_NAME="FnSinkConnector_2"
@@ -300,21 +314,6 @@
         | fn invoke $FN_APP_NAME review_producer_fn
 
 
-exit
-
-
-# for local fn testing
-OCI_OBJECT_STORAGE_NAMESPACE=intrandallbarnes
-GOOD_REVIEW_BUCKET_NAME=goodRevBucket
-BAD_REVIEWS_BUCKET_NAME=badRevBucket
-OCI_OBJECT_STORAGE_REGION=us-phoenix-1
-OCI_OSS_KAFKA_BOOTSTRAP_SERVERS=streaming.us-phoenix-1.oci.oraclecloud.com:9092
-OCI_TENANCY_NAME=intrandallbarnes
-OCI_USER_ID=mayur.raleraskar@oracle.com
-OCI_AUTH_TOKEN=2m{s4WTCXysp:o]tGx4K
-STREAM_POOL_OCID=ocid1.streampool.oc1.phx.amaaaaaauwpiejqactzuddgmegg42gkhwpz24wy6k7ka3n24nc52mpzqfvua
-REVIEWS_STREAM_OR_TOPIC_NAME=testnew
-UNPUBLISHBALE_WORD_LIST="bad1,bad2,bad3,bad4"
 
 
 
