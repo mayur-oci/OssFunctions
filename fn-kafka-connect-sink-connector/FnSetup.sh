@@ -170,7 +170,7 @@
             #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
             docker login -u $OCI_TENANCY_NAME/$OCI_USER_ID -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
 
-          # Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
+          #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
             FN_APP_NAME=fn_oss_app_test
             OCI_SUBNETID_LIST_JSON=[\"$OCI_SUBNET_1\", \"$OCI_SUBNET_2\", \"$OCI_SUBNET_3\"]
             fn create app $FN_APP_NAME  --annotation oracle.com/oci/subnetIds=$OCI_SUBNETID_LIST_JSON
@@ -178,8 +178,8 @@
             fn update app $FN_APP_NAME --syslog-url $TAIL_URL
             sleep 5
 
-          # Configs for the functions
-            # Configs for Kafka Producer function    
+          #Configs for the functions
+            #Configs for Kafka Producer function    
             fn config app $FN_APP_NAME OCI_TENANCY_NAME $OCI_TENANCY_NAME
             fn config app $FN_APP_NAME OCI_OSS_KAFKA_BOOTSTRAP_SERVERS "streaming.${OCI_CURRENT_REGION}.oci.oraclecloud.com:9092" # again depends on OCI region where your stream is.
             fn config app $FN_APP_NAME STREAM_POOL_NAME $OCI_STREAM_POOL_NAME
@@ -188,7 +188,7 @@
             fn config app $FN_APP_NAME OCI_USER_ID $OCI_USER_ID
             fn config app $FN_APP_NAME OCI_AUTH_TOKEN $OCI_FN_USER_AUTH_TOKEN 
 
-            # Configs for Kafka Consumer function
+            #Configs for Kafka Consumer function
             fn config app $FN_APP_NAME OCI_OBJECT_STORAGE_NAMESPACE $OCI_TENANCY_NAME
             fn config app $FN_APP_NAME OCI_OBJECT_STORAGE_REGION $OCI_CURRENT_REGION
             fn config app $FN_APP_NAME GOOD_REVIEW_BUCKET_NAME $GOOD_REVIEW_BUCKET_NAME 
@@ -205,6 +205,94 @@
             
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
             fn update function $FN_APP_NAME review_producer_fn --memory 512 --timeout 120 
+
+#Create Compute Instance for running Kafka Oci Fn Sink Connector
+        AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
+        echo availability-domain chosen for compute instance: $AVAILABILITY_DOMAIN
+        
+        COMPUTE_SHAPE='VM.Standard1.4'
+        SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
+        #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
+        ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaym3vkgeag7mn3csoxxvk6gdirryocsubuv2xvgefhi2wrwytp2gq'
+        COMPUTE_OCID=$(oci compute instance launch \
+                            -c ${OCI_CMPT_ID} \
+                            --shape "${COMPUTE_SHAPE}" \
+                            --display-name FnSinkConnectorVM \
+                            --image-id ${ORALCE_LINUX_IMAGE_OCID} \
+                            --ssh-authorized-keys-file "${SSH_PUBLIC_KEY_LOCATION}" \
+                            --subnet-id ${OCI_SUBNET_1} \
+                            --availability-domain "${AD}" \
+                            --wait-for-state RUNNING \
+                            --query "data.id" \
+                            --raw-output) 
+        #Get the Public IP
+        COMPUTE_PUBLIC_IP=$(oci compute instance list-vnics \
+            --instance-id "${COMPUTE_OCID}" \
+            --query 'data[0]."public-ip"' \
+            --raw-output)
+            echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_IP     
+        #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
+        MATCHING_RULE_FOR_DG="ANY {instance.id = '${COMPUTE_OCID}'}"
+        DG_NAME='dg_for_kafka_fn_sink'_$(date "+DATE_%Y_%m_%d_TIME_%H_%M_%S")
+        DG_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
+
+        DG_POLICY="[\"Allow dynamic-group dg_for_kafka_fn_sink to use log-content in compartment ${OCI_CMPT_NAME} \"]"
+        echo $DG_POLICY > statements.json
+        DG_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
+        echo Created policy ${DG_POLICY_ID}.  Use the command: \'oci iam policy get --policy-id "${DG_POLICY_ID}"\' if you want to view the policy.
+        rm -rf statements.json                        
+
+        # transfer env values for docker
+
+        echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} > env.json
+        echo OCID_STREAM_POOL=${OCI_STREAM_POOL_ID} > env.json
+        echo OCI_USER_ID=${OCI_USER_ID} > env.json
+        echo OCI_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN} > env.json
+        echo OCI_STREAM_PARTITIONS_COUNT=${OCI_STREAM_PARTITIONS_COUNT} > env.json
+
+
+        # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector
+        export GIT_SETUP_EXPORTER="https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
+        ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" \
+                "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
+        echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForLogExporter.sh' on the instance"
+
+        ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no"
+
+
+
+#Start Kafka Fn Sink Connector worker 
+        FN_CONSUMER_FUNCTION_NAME=fn_oss_app_test
+        OCI_STREAM_PARTITIONS_COUNT=1
+        FN_CONSUMER_FUNCTION_NAME=review_consumer_fn
+        FN_CONNECTOR_NAME="FnSinkConnector_2"
+
+        curl -X DELETE http://${COMPUTE_PUBLIC_IP}:8082/connectors/$FN_CONNECTOR_NAME
+
+        echo "Connector $FN_CONNECTOR_NAME deleted"
+
+        curl -X POST \
+          http://${COMPUTE_PUBLIC_IP}:8082/connectors \
+          -H 'content-type: application/json' \
+          -d "{
+          \"name\": \"${FN_CONNECTOR_NAME}\",
+          \"config\": {
+            \"connector.class\": \"io.fnproject.kafkaconnect.sink.FnSinkConnector\",
+            \"tasks.max\": \"${OCI_STREAM_PARTITIONS_COUNT}\",
+            \"topics\": \"${OCI_STREAM_NAME}\",
+            \"ociRegionForFunction\": \"${OCI_CURRENT_REGION}\",
+            \"ociCompartmentIdForFunction\": \"${OCI_CMPT_ID}\",
+            \"functionAppName\": \"${FN_APP_NAME}\",
+            \"functionName\": \"${FN_CONSUMER_FUNCTION_NAME}\",
+            \"ociLocalConfig\": \"${HOME}\"
+          }
+        }"
+
+#Invoke Producer Function
+echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
+| fn invoke $FN_APP_NAME review_producer_fn
+echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
+| fn invoke $FN_APP_NAME review_producer_fn
 
 
 exit

@@ -4,6 +4,7 @@ CONNECT_HARNESS_OCID='ocid1.connectharness.oc1.phx.amaaaaaauwpiejqab656o47baui5m
 OCID_STREAM_POOL='ocid1.streampool.oc1.phx.amaaaaaauwpiejqactzuddgmegg42gkhwpz24wy6k7ka3n24nc52mpzqfvua'
 OCI_USER_ID="mayur.raleraskar@oracle.com"
 OCI_USER_AUTH_TOKEN="2m{s4WTCXysp:o]tGx4K"
+
 OCI_STREAM_USERNAME="intrandallbarnes/$OCI_USER_ID/$OCID_STREAM_POOL"
 KAFKA_SASL_CONFIG="org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${OCI_STREAM_USERNAME}\" password=\"${OCI_USER_AUTH_TOKEN}\";"
 OCI_STREAM_PARTITIONS_COUNT=1
