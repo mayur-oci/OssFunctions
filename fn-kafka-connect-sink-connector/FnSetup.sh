@@ -176,9 +176,10 @@
             FN_APP_NAME=fn_oss_app_test
             OCI_SUBNETID_LIST_JSON=[\"$OCI_SUBNET_1\", \"$OCI_SUBNET_2\", \"$OCI_SUBNET_3\"]
             fn create app $FN_APP_NAME  --annotation oracle.com/oci/subnetIds=$OCI_SUBNETID_LIST_JSON
-            TAIL_URL=tcp://logs5.papertrailapp.com:45170
-            fn update app $FN_APP_NAME --syslog-url $TAIL_URL
-            sleep 5
+            TAIL_URL=tcp://logs5.papertrailapp.com:45170 #optional
+            if [ ! -z "$TAIL_URL" ]; then
+               fn update app $FN_APP_NAME --syslog-url $TAIL_URL
+            fi   
 
           #Configs for the functions
             #Configs for Kafka Producer function    
@@ -188,6 +189,7 @@
             fn config app $FN_APP_NAME REVIEWS_STREAM_OR_TOPIC_NAME $OCI_STREAM_NAME
             fn config app $FN_APP_NAME STREAM_POOL_OCID $OCI_STREAM_POOL_ID
             fn config app $FN_APP_NAME OCI_USER_ID $OCI_USER_ID
+            #TODO use OCI secrets instead of config for auth token
             fn config app $FN_APP_NAME OCI_AUTH_TOKEN $OCI_FN_USER_AUTH_TOKEN 
 
             #Configs for Kafka Consumer function
