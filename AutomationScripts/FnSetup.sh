@@ -210,12 +210,13 @@
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
             fn update function $FN_APP_NAME review_producer_fn --memory 512 --timeout 120 
 
-#Create Compute Instance for running Kafka Oci Fn Sink Connector
+#Create Compute Instance for running Kafka Oci Fn Sink Connector   
+        SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
+        SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
+
+        COMPUTE_SHAPE='VM.Standard1.4'
         AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
         echo availability-domain chosen for compute instance: $AD
-        
-        COMPUTE_SHAPE='VM.Standard1.4'
-        SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
         #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
         ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaxdnx3den32vwplngpeu44zakw7lxup7vcdd3jmke4pfleaug3m6q'
         COMPUTE_OCID=$(oci compute instance launch \
@@ -262,18 +263,25 @@
 
         # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector
         export GIT_SETUP_EXPORTER="https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
-        SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
+        
+        cat env.json > remoteScript.sh 
+        cat ./OssFunctions/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh > remoteScript.sh
         ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" \
-                "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
+        "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
+        scp i $SSH_PRIVATE_KEY_LOCATION ./remoteScript.sh opc@$COMPUTE_PUBLIC_IP:~/
         echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForFnSinkConnector.sh' on the instance"
 
-        ssh -i sshkeypair1.key.pvt \
-                      -n opc@129.146.253.178 -o ServerAliveInterval=60 \
+        ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
+                      -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
                       -o "StrictHostKeyChecking no" \
-                      "export OCID_STREAM_POOL=100 | \
-                      sudo sh ~/test.sh"  > remoteMachine.txt
+                      sudo sh ~/test.sh"  
 
 
+#Invoke Producer Function
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
+        | fn invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
+        | fn invoke $FN_APP_NAME review_producer_fn
 
 exit 
 # ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no"
@@ -307,11 +315,7 @@ exit
           }
         }"
 
-#Invoke Producer Function
-        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
-        | fn invoke $FN_APP_NAME review_producer_fn
-        echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
-        | fn invoke $FN_APP_NAME review_producer_fn
+
 
 
 

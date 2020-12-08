@@ -1,0 +1,12 @@
+[
+  {
+    "description": null,
+    "destination": "0.0.0.0/0",
+    "destination-type": "CIDR_BLOCK",
+    "icmp-options": null,
+    "is-stateless": false,
+    "protocol": "all",
+    "tcp-options": null,
+    "udp-options": null
+  }
+]
