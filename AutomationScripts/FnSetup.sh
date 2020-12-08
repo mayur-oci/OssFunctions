@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#Pre-reqs oci cli, fn cli, java-8 and maven installed
+#Pre-reqs oci cli, fn cli needs to installed the machine
 
 #Basic tenancy and user information. User needs admin privileges.
           OCI_TENANCY_NAME=intrandallbarnes
@@ -248,6 +248,9 @@
         rm -rf statements.json                        
 
         # transfer env values for docker
+                SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
+
+        COMPUTE_PUBLIC_IP=129.146.246.113
         echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
         echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} >> env.json
         echo OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID} >> env.json
@@ -261,64 +264,39 @@
         echo FN_CONSUMER_FUNCTION_NAME=review_consumer_fn >> env.json
         echo FN_CONNECTOR_NAME="FnSinkConnector_2" >> env.json
 
-        # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector
-        export GIT_SETUP_EXPORTER="https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
-        
-        cat env.json > remoteScript.sh 
-        cat ./OssFunctions/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh > remoteScript.sh
-        ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" \
-        "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
-        scp i $SSH_PRIVATE_KEY_LOCATION ./remoteScript.sh opc@$COMPUTE_PUBLIC_IP:~/
-        echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForFnSinkConnector.sh' on the instance"
+        # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector       
+        cat env.json > kafkaConnector.sh 
+        curl -O "https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
+        cat SetupOciInstanceForFnSinkConnector.sh >> kafkaConnector.sh ; chmod 777 kafkaConnector.sh
+        rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
+        scp -i $SSH_PRIVATE_KEY_LOCATION -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" ./kafkaConnector.sh opc@$COMPUTE_PUBLIC_IP:~/
 
         ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
                       -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
                       -o "StrictHostKeyChecking no" \
-                      sudo sh ~/test.sh"  
+                      "sudo sh ~/kafkaConnector.sh"  
 
 
 #Invoke Producer Function
-        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, \
+        "productId": "PRODUCT_100", "reviewContent": "review content"}' \
+        | fn invoke $FN_APP_NAME review_producer_fn 
+
+        echo -n '{"reviewId": "REV_200", "time": 200010000000100, \
+        "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
         | fn invoke $FN_APP_NAME review_producer_fn
-        echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
-        | fn invoke $FN_APP_NAME review_producer_fn
 
-exit 
-# ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no"
-# ssh -i sshkeypair1.key.pvt opc@129.146.253.178 "nohup sudo sh ~/test.sh > ~/test.txt&"
-# ssh -i sshkeypair1.key.pvt -n opc@129.146.253.178 "tail -f ~/test.txt" &
+#Checking if objects are created in the buckets
+       oci os object list -bn ${GOOD_REVIEW_BUCKET_NAME}
+       oci os object list -bn ${BAD_REVIEW_BUCKET_NAME}
 
-
-#Start Kafka Fn Sink Connector worker 
-        OCI_STREAM_PARTITIONS_COUNT=1
-        FN_CONSUMER_FUNCTION_NAME=review_consumer_fn
-        FN_CONNECTOR_NAME="FnSinkConnector_2"
-
-        curl -X DELETE http://${COMPUTE_PUBLIC_IP}:8082/connectors/$FN_CONNECTOR_NAME
-
-        echo "Connector $FN_CONNECTOR_NAME deleted"
-
-        curl -X POST \
-          http://${COMPUTE_PUBLIC_IP}:8082/connectors \
-          -H 'content-type: application/json' \
-          -d "{
-          \"name\": \"${FN_CONNECTOR_NAME}\",
-          \"config\": {
-            \"connector.class\": \"io.fnproject.kafkaconnect.sink.FnSinkConnector\",
-            \"tasks.max\": \"${OCI_STREAM_PARTITIONS_COUNT}\",
-            \"topics\": \"${OCI_STREAM_NAME}\",
-            \"ociRegionForFunction\": \"${OCI_CURRENT_REGION}\",
-            \"ociCompartmentIdForFunction\": \"${OCI_CMPT_ID}\",
-            \"functionAppName\": \"${FN_APP_NAME}\",
-            \"functionName\": \"${FN_CONSUMER_FUNCTION_NAME}\",
-            \"ociLocalConfig\": \"${HOME}\"
-          }
-        }"
-
-
-
-
-
+#Delete all resources in cmpt
+       oci compute instance terminate  --instance-id ${COMPUTE_OCID} --force --wait-for-state DELETED
+#delete fn and fn app
+oci iam user delete --user-id {OCI_FN_USER_ID} --force --wait-for-state INACTIVE
+oci iam group delete --group-id {OCI_FN_GROUP_ID} --force --wait-for-state INACTIVE
+oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
+oci network vcn delete --vcn-id ${OCI_FN_VCN_ID} --force --wait-for-state INACTIVE
 
 
 
