@@ -1,4 +1,6 @@
-# Pre-reqs oci cli, fn cli, java-8 and maven installed
+#!/bin/bash
+
+#Pre-reqs oci cli, fn cli, java-8 and maven installed
 
 #Basic tenancy and user information. User needs admin privileges.
           OCI_TENANCY_NAME=intrandallbarnes
@@ -7,17 +9,18 @@
           OCI_HOME_REGION=us-ashburn-1
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
           OCI_CURRENT_REGION_CODE=phx
-          OCI_CMPT_NAME=CMPT_FOR_OSS_FN_INTEGRATION_D
+          OCI_CMPT_NAME=cossfn1
           OCI_CLI_PROFILE=DEFAULT
 
 #Create new compartment for this demo...We will create all resources for this demo inside this compartment.
-          OCI_CMPT_ID=$(oci iam compartment create --name ${OCI_CMPT_NAME} --compartment-id ocid1.tenancy.oc1..aaaaaaaaopbu45aomik7sswe4nzzll3f6ii6pipd5ttw4ayoozez37qqmh3a --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --query "data.id" --raw-output)
+          OCI_CMPT_ID=$(oci iam compartment create --name ${OCI_CMPT_NAME} --compartment-id ${OCI_TENANCY_OCID} \
+                         --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --query "data.id" --raw-output)
           echo Created compartment ${OCI_CMPT_NAME} with ID ${OCI_CMPT_ID}
 
 #Create OCI streampool and stream(aka Kafka Topic) in it
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
           OCI_STREAM_NAME=REVIEWS_STREAM
-          OCI_STREAM_PARTITIONS_COUNT=3
+          OCI_STREAM_PARTITIONS_COUNT=1
           OCI_STREAM_POOL_ID=$(oci streaming admin stream-pool create -c ${OCI_CMPT_ID} --name ${OCI_STREAM_POOL_NAME} --wait-for-state ACTIVE --query "data.id" --raw-output)
           OCI_STREAM_ID=$(oci streaming admin stream create --name ${OCI_STREAM_NAME} --partitions ${OCI_STREAM_PARTITIONS_COUNT} --stream-pool-id ${OCI_STREAM_POOL_ID} --wait-for-state ACTIVE --query "data.id" --raw-output)
           OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
@@ -47,9 +50,7 @@
           echo Created policy "FaaS_POLICY_$OCI_CMPT_NAME".  Use the command: \'oci iam policy get --policy-id "${OCI_FN_POLICY_ID}"\' if you want to view the policy.
           rm -rf statements.json
 
-# TODO create DG and DG policy for fn sink worker node. Create node and deploy worker code on it!
-
-#Creating subnets for OCI functions and KafkaFnSink worker node
+#Creating subnets for OCI functions and compute instance for Kafka FnSink Connector worker 
           # create VCN:
             echo Creating VCN. This may take a few seconds...
             OCI_FN_VCN_NAME=faas-demo-vcn
@@ -96,7 +97,7 @@
           # update default route table: (rule allows all internet traffic to hit the internet gateway we just created)
             ROUTE_RULES="[{\"cidrBlock\":\"0.0.0.0/0\",\"networkEntityId\":\""${OCI_FN_INTERNET_GATEWAY_ID}"\"}]"
             echo $ROUTE_RULES >route-rules.json
-            OCI_ROUTE_TABLE_UPDATE=$(oci network route-table update --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --route-rules file://$(pwd)/route-rules.json --force)
+            oci network route-table update --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --route-rules file://$(pwd)/route-rules.json --force
             echo Updated default route table for VCN to allow traffic to internet gateway
             rm route-rules.json
 
@@ -155,19 +156,20 @@
             fn delete context $FN_CONTEXT # just to make script idempotent
             fn create context $FN_CONTEXT --provider oracle 
             fn use context $FN_CONTEXT
-            fn update context oracle.compartment-id $OCI_CMPT_OCID
+            fn update context oracle.compartment-id $OCI_CMPT_ID
             fn update context api-url "https://functions.${OCI_CURRENT_REGION}.oraclecloud.com" # this is the OCI fn service url, again this is region specific
-            fn update context registry $FN_DOCKER_REPO_URL
             fn update context oracle.profile $OCI_CLI_PROFILE # make sure to update your local ~./oci/config file with api and other credentials for this user
+          
+            #Docker setup for fn platform
+            OCI_DOCKER_REGISTRY_URL="https://${OCI_CURRENT_REGION_CODE}.ocir.io"  # OCI docker registry URL. It is region specific e.g. for Ashburn iad.ocir.io
+            FN_DOCKER_REPO_NAME=docker_repo_fn_oss_test # Your docker repo name...will be created when we push fn docker image
+            FN_DOCKER_REPO_URL=$OCI_DOCKER_REGISTRY_URL/$OCI_TENANCY_NAME/$FN_DOCKER_REPO_NAME
+            fn update context registry $FN_DOCKER_REPO_URL
             
           #Optional...if fn setup is done correctely this command should run without any issues.
             fn list apps 
 
-          #Docker setup for fn platform
-            OCI_DOCKER_REGISTRY_URL="https://${OCI_CURRENT_REGION_CODE}.ocir.io"  # OCI docker registry URL. It is region specific e.g. for Ashburn iad.ocir.io
-            FN_DOCKER_REPO_NAME=docker_repo_fn_oss_test # Your docker repo name...will be created when we push fn docker image
-            FN_DOCKER_REPO_URL=$OCI_DOCKER_REGISTRY_URL/$OCI_TENANCY_NAME/$FN_DOCKER_REPO_NAME
-            #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
+          #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
             docker login -u $OCI_TENANCY_NAME/$OCI_USER_ID -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
@@ -253,6 +255,7 @@
 
         # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector
         export GIT_SETUP_EXPORTER="https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
+        SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
         ssh -i $SSH_PRIVATE_KEY_LOCATION opc@$COMPUTE_PUBLIC_IP -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" \
                 "curl -O $GIT_SETUP_EXPORTER; chmod 777 SetupOciInstanceForLogExporter.sh"
         echo;echo;echo "Run the Script for setup after with root privileges aka 'sudo ./SetupOciInstanceForLogExporter.sh' on the instance"
@@ -289,10 +292,10 @@
         }"
 
 #Invoke Producer Function
-echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
-| fn invoke $FN_APP_NAME review_producer_fn
-echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
-| fn invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' \
+        | fn invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
+        | fn invoke $FN_APP_NAME review_producer_fn
 
 
 exit
