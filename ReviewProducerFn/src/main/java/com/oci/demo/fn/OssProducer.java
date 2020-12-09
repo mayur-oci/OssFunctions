@@ -28,7 +28,7 @@ public class OssProducer {
             ProducerRecord<String, String> record = new ProducerRecord<>(streamOrKafkaTopicName, UUID.randomUUID().toString(), objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(review));
             producer.send(record, (md, ex) -> {
                 if (ex != null) {
-                    System.err.println("exception occurred in producer for review :"+record.value()
+                    System.err.println("exception occurred in producer for review :" + record.value()
                             + ", exception is " + ex);
                     ex.printStackTrace();
                 } else {

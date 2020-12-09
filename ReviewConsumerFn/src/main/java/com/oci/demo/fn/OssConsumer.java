@@ -13,8 +13,8 @@ public class OssConsumer {
 
     static {
         String listOfUnpublishableWords = System.getenv().get("UNPUBLISHBALE_WORD_LIST");
-        System.err.println("List Of Unpublishable Words is "+ listOfUnpublishableWords);
-        for(String badWord:listOfUnpublishableWords.split(",")){
+        System.err.println("List Of Unpublishable Words is " + listOfUnpublishableWords);
+        for (String badWord : listOfUnpublishableWords.split(",")) {
             setOfUnpublishableWords.add(badWord.trim());
         }
     }
@@ -33,7 +33,7 @@ public class OssConsumer {
 
     public boolean handleRequest(ReviewReq msg) {
         boolean isItGoodReview = analyseUserGeneratedContent(msg.getReviewContent());
-        System.err.println(" returning "+ isItGoodReview);
+        System.err.println(" returning " + isItGoodReview);
         return ObjectStorageHandler.uploadReview(isItGoodReview, msg);
     }
 

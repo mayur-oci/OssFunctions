@@ -26,10 +26,16 @@
           OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
 
 #Create buckets for processed reviews
-          GOOD_REVIEW_BUCKET_NAME=GoodReviewsBucket
-          BAD_REVIEWS_BUCKET_NAME=BadReviewsBucket
+          GOOD_REVIEW_BUCKET_NAME=goodRevBucket
+          BAD_REVIEWS_BUCKET_NAME=badRevBucket
           GOOD_REVIEWS_BUCKET_OCID=$(oci os bucket create --name ${GOOD_REVIEW_BUCKET_NAME} -c $OCI_CMPT_ID --region $OCI_CURRENT_REGION --raw-output --query "data.id")
           BAD_REVIEWS_BUCKET_OCID=$(oci os bucket create --name ${BAD_REVIEWS_BUCKET_NAME} -c $OCI_CMPT_ID --region $OCI_CURRENT_REGION --raw-output --query "data.id")
+          if [ -z "$GOOD_REVIEWS_BUCKET_OCID" ]; then
+              GOOD_REVIEWS_BUCKET_OCID=$(oci os bucket get --bucket-name ${GOOD_REVIEW_BUCKET_NAME} --raw-output --query "data.id")
+          fi
+          if [ -z "$BAD_REVIEWS_BUCKET_OCID" ]; then
+              BAD_REVIEWS_BUCKET_OCID=$(oci os bucket get --bucket-name ${BAD_REVIEWS_BUCKET_NAME} --raw-output --query "data.id")
+          fi          
 
 #Create Dynamic group and policy for your function
           MATCHING_RULE_FOR_FN_DG="ALL {resource.type = 'fnfunc', resource.compartment.id=$OCI_CMPT_ID}	"
@@ -37,8 +43,8 @@
 
           FN_POLICY="[\"Allow dynamic-group "fn_dg_$OCI_CMPT_NAME" to manage all-resources in compartment $OCI_CMPT_NAME \"]"
           echo $FN_POLICY > statements.json
-          OCI_FN_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "fn_dg_policy_$OCI_CMPT_NAME" --description "A policy for these functions" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
-          echo Created policy "fn_dg_policy_$OCI_CMPT_NAME".  Use the command: \'oci iam policy get --policy-id "${OCI_FN_POLICY_ID}"\' if you want to view the policy.
+          OCI_FN_DG_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "fn_dg_policy_$OCI_CMPT_NAME" --description "A policy for these functions" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
+          echo Created policy "fn_dg_policy_$OCI_CMPT_NAME".  Use the command: \'oci iam policy get --policy-id "${OCI_FN_DG_POLICY_ID}"\' if you want to view the policy.
           rm -rf statements.json
 
 #Create Policy for allowing FaaS service(hence your function) to access
@@ -239,18 +245,15 @@
         #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
         MATCHING_RULE_FOR_DG="ANY {instance.id = '${COMPUTE_OCID}'}"
         DG_NAME='dg_for_kafka_fn_sink'_$(date "+DATE_%Y_%m_%d_TIME_%H_%M_%S")
-        DG_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
+        DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
 
         DG_POLICY="[\"Allow dynamic-group dg_for_kafka_fn_sink to use log-content in compartment ${OCI_CMPT_NAME} \"]"
         echo $DG_POLICY > statements.json
-        DG_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
-        echo Created policy ${DG_POLICY_ID}.  Use the command: \'oci iam policy get --policy-id "${DG_POLICY_ID}"\' if you want to view the policy.
-        rm -rf statements.json                        
+        DG_CI_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
+        echo Created policy ${DG_CI_POLICY_ID}.  Use the command: \'oci iam policy get --policy-id "${DG_CI_POLICY_ID}"\' if you want to view the policy.
+        rm statements.json                        
 
         # transfer env values for docker
-                SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
-
-        COMPUTE_PUBLIC_IP=129.146.246.113
         echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
         echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} >> env.json
         echo OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID} >> env.json
@@ -290,13 +293,38 @@
        oci os object list -bn ${GOOD_REVIEW_BUCKET_NAME}
        oci os object list -bn ${BAD_REVIEW_BUCKET_NAME}
 
+
+
 #Delete all resources in cmpt
-       oci compute instance terminate  --instance-id ${COMPUTE_OCID} --force --wait-for-state DELETED
-#delete fn and fn app
-oci iam user delete --user-id {OCI_FN_USER_ID} --force --wait-for-state INACTIVE
-oci iam group delete --group-id {OCI_FN_GROUP_ID} --force --wait-for-state INACTIVE
-oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
-oci network vcn delete --vcn-id ${OCI_FN_VCN_ID} --force --wait-for-state INACTIVE
+    #delete compute
+    oci iam policy delete --policy-id ${DG_CI_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
+    oci compute instance terminate  --instance-id ${COMPUTE_OCID} --force --wait-for-state TERMINATED
+    
+    #delete buckets
+    os object list -bn ${GOOD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
+    os object list -bn ${BAD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
+
+    #delete fn and fn app
+    oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
+    
+    #delete user and user-group
+    oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN} --user-id ${OCI_FN_USER_ID} --force
+
+    oci iam user delete --user-id {OCI_FN_USER_ID} --force --wait-for-state INACTIVE
+    oci iam group delete --group-id {OCI_FN_GROUP_ID} --force --wait-for-state INACTIVE
+
+    oci network route-table delete --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --force --wait-for-state TERMINATED
+    oci network security-list delete --security-list-id ${OCI_FN_VCN_SECURITY_LIST_ID} --force --wait-for-state TERMINATED
+    oci network internet-gateway delete --ig-id ${OCI_FN_INTERNET_GATEWAY_ID} --force --wait-for-state TERMINATED
+    oci network subnet delete --subnet-id ${OCI_SUBNET_1} --force --wait-for-state TERMINATING
+    oci network subnet delete --subnet-id ${OCI_SUBNET_2} --force --wait-for-state TERMINATING
+    oci network subnet delete --subnet-id ${OCI_SUBNET_3} --force --wait-for-state TERMINATING
+
+
+    oci network vcn delete --vcn-id ${OCI_FN_VCN_ID} --force --wait-for-state TERMINATING
 
 
 

@@ -66,7 +66,9 @@ class ObjectStorageHandler {
         System.err.println(" In the uploadReview function ");
 
         try {
-            File tempFile = new File("/tmp/" + review.getProductId() + ".json");
+            String longCurr = Long.toString(System.currentTimeMillis());
+            String randomEnd = longCurr.substring(longCurr.length() - 4, longCurr.length());
+            File tempFile = new File("/tmp/" + review.getProductId() + "_" + randomEnd + ".json");
             if (tempFile.exists()) {
                 tempFile.delete();
             }
@@ -86,19 +88,19 @@ class ObjectStorageHandler {
     private static BasicAuthenticationDetailsProvider getOciAuthProvider() {
         String version = System.getenv("OCI_RESOURCE_PRINCIPAL_VERSION");
         BasicAuthenticationDetailsProvider provider = null;
-        if( version != null ) {
+        if (version != null) {
             provider = ResourcePrincipalAuthenticationDetailsProvider.builder().build();
-        } else{
+        } else {
             try {
-                    // for local dev/testing
-                    // the user profile you choose here must belong to a group with these Authorizations in a policy, unless the user is Admin
-                    File file = new File("/Users/mraleras/.oci/config");
-                    final ConfigFileReader.ConfigFile configFile;
-                    configFile = ConfigFileReader.parse(file.getAbsolutePath(), "DEFAULT");
-                    provider = new ConfigFileAuthenticationDetailsProvider(configFile);
-                } catch (IOException ioException) {
-                    ioException.printStackTrace();
-                }
+                // for local dev/testing
+                // the user profile you choose here must belong to a group with these Authorizations in a policy, unless the user is Admin
+                File file = new File("/Users/mraleras/.oci/config");
+                final ConfigFileReader.ConfigFile configFile;
+                configFile = ConfigFileReader.parse(file.getAbsolutePath(), "DEFAULT");
+                provider = new ConfigFileAuthenticationDetailsProvider(configFile);
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
         }
         return provider;
     }

@@ -18,7 +18,7 @@ public class FnSinkConnector extends SinkConnector {
         IdentityOciProvider.initialize(config);
         OciFunction.initialize(config);
         System.out.println("INFO FnSinkConnector started with config " + config +
-                " and identity "+ IdentityOciProvider.provider);
+                " and identity " + IdentityOciProvider.provider);
     }
 
     @Override
