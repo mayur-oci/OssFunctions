@@ -9,13 +9,19 @@
           OCI_HOME_REGION=us-ashburn-1
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
           OCI_CURRENT_REGION_CODE=phx
-          OCI_CMPT_NAME=cossfn1
+          OCI_CMPT_NAME=KafkaSinkConnectorForFn_1
           OCI_CLI_PROFILE=DEFAULT
+
+#Common utility functions          
+          JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M_%S")
+          out(){
+            echo $1 | tee -a resourceIdList_For_JobRun_${JobRunId}.txt
+          }
 
 #Create new compartment for this demo...We will create all resources for this demo inside this compartment.
           OCI_CMPT_ID=$(oci iam compartment create --name ${OCI_CMPT_NAME} --compartment-id ${OCI_TENANCY_OCID} \
                          --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --query "data.id" --raw-output)
-          echo Created compartment ${OCI_CMPT_NAME} with ID ${OCI_CMPT_ID}
+          out "OCI_CMPT_NAME=${OCI_CMPT_ID}"
 
 #Create OCI streampool and stream(aka Kafka Topic) in it
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
@@ -24,6 +30,9 @@
           OCI_STREAM_POOL_ID=$(oci streaming admin stream-pool create -c ${OCI_CMPT_ID} --name ${OCI_STREAM_POOL_NAME} --wait-for-state ACTIVE --query "data.id" --raw-output)
           OCI_STREAM_ID=$(oci streaming admin stream create --name ${OCI_STREAM_NAME} --partitions ${OCI_STREAM_PARTITIONS_COUNT} --stream-pool-id ${OCI_STREAM_POOL_ID} --wait-for-state ACTIVE --query "data.id" --raw-output)
           OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
+          out "OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID}"
+          out "OCI_STREAM_ID=${OCI_STREAM_ID}"
+          out "OCI_CONNECT_HARNESS_ID=${OCI_CONNECT_HARNESS_ID}"
 
 #Create buckets for processed reviews
           GOOD_REVIEW_BUCKET_NAME=goodRevBucket
@@ -35,26 +44,27 @@
           fi
           if [ -z "$BAD_REVIEWS_BUCKET_OCID" ]; then
               BAD_REVIEWS_BUCKET_OCID=$(oci os bucket get --bucket-name ${BAD_REVIEWS_BUCKET_NAME} --raw-output --query "data.id")
-          fi          
+          fi
+          out "GOOD_REVIEWS_BUCKET_OCID=${GOOD_REVIEWS_BUCKET_OCID}"
+          out "BAD_REVIEWS_BUCKET_OCID=${BAD_REVIEWS_BUCKET_OCID}"
 
-#Create Dynamic group and policy for your function
+#Create Dynamic group and policy for your function resources and for allowing FaaS service(hence your function) to access
+          # 1- docker repo for getting function code and
+          # 2- subnets for running funnctions inside it. We will soon create functions
           MATCHING_RULE_FOR_FN_DG="ALL {resource.type = 'fnfunc', resource.compartment.id=$OCI_CMPT_ID}	"
           OCI_FN_DG_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'for_fns_in_cmpt' --name "fn_dg_$OCI_CMPT_NAME" --matching-rule "$MATCHING_RULE_FOR_FN_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
 
-          FN_POLICY="[\"Allow dynamic-group "fn_dg_$OCI_CMPT_NAME" to manage all-resources in compartment $OCI_CMPT_NAME \"]"
+          FN_POLICY="[\"Allow dynamic-group "fn_dg_$OCI_CMPT_NAME" to \
+                               manage all-resources in compartment $OCI_CMPT_NAME \", \
+                      \"Allow service FaaS to read repos in tenancy\", \
+                      \"Allow service FaaS to use virtual-network-family in compartment $OCI_CMPT_NAME\"]"
           echo $FN_POLICY > statements.json
-          OCI_FN_DG_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "fn_dg_policy_$OCI_CMPT_NAME" --description "A policy for these functions" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
+          OCI_FN_DG_AND_FAAS_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "fn_dg_faas_policy_$OCI_CMPT_NAME" --description "A policy for these function resources and faas" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
           echo Created policy "fn_dg_policy_$OCI_CMPT_NAME".  Use the command: \'oci iam policy get --policy-id "${OCI_FN_DG_POLICY_ID}"\' if you want to view the policy.
           rm -rf statements.json
-
-#Create Policy for allowing FaaS service(hence your function) to access
-          # 1- docker repo for getting function code and
-          # 2- subnets for running funnctions inside it. We will soon create functions
-          FN_POLICY="[\"Allow service FaaS to read repos in tenancy\", \"Allow service FaaS to use virtual-network-family in compartment $OCI_CMPT_NAME\"]"
-          echo $FN_POLICY > statements.json
-          OCI_FN_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "FaaS_POLICY_$OCI_CMPT_NAME" --description "A policy for FaaS functions" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
-          echo Created policy "FaaS_POLICY_$OCI_CMPT_NAME".  Use the command: \'oci iam policy get --policy-id "${OCI_FN_POLICY_ID}"\' if you want to view the policy.
-          rm -rf statements.json
+          out "OCI_FN_DG_ID=${OCI_FN_DG_ID}"          
+          out "OCI_FN_DG_AND_FAAS_POLICY_ID=${OCI_FN_DG_POLICY_ID}"        
+          
 
 #Creating subnets for OCI functions and compute instance for Kafka FnSink Connector worker 
           # create VCN:
@@ -80,6 +90,9 @@
               OCI_FN_VCN_SECURITY_LIST_ID=$(oci network vcn get --vcn-id ${OCI_FN_VCN_ID} --query 'data."default-security-list-id"' --raw-output)
               echo Created VCN ${OCI_FN_VCN_NAME} with ID ${OCI_FN_VCN_ID}
             fi
+            out "OCI_FN_VCN_ID=${OCI_FN_VCN_ID}"          
+            out "OCI_FN_VCN_ROUTE_TABLE_ID=${OCI_FN_VCN_ROUTE_TABLE_ID}"          
+            out "OCI_FN_VCN_SECURITY_LIST_ID=${OCI_FN_VCN_SECURITY_LIST_ID}"          
 
           # create subnets:
             OCI_FN_SUBNET_1_NAME=faas-subnet-1
@@ -89,7 +102,10 @@
             OCI_SUBNET_1=$(oci network subnet create --display-name ${OCI_FN_SUBNET_1_NAME} --cidr-block "${OCI_FN_VCN_SUBNET_1_CIDR_BLOCK}" ${VCN_PARAMS})
             OCI_SUBNET_2=$(oci network subnet create --display-name ${OCI_FN_SUBNET_2_NAME} --cidr-block "${OCI_FN_VCN_SUBNET_2_CIDR_BLOCK}" ${VCN_PARAMS})
             OCI_SUBNET_3=$(oci network subnet create --display-name ${OCI_FN_SUBNET_3_NAME} --cidr-block "${OCI_FN_VCN_SUBNET_3_CIDR_BLOCK}" ${VCN_PARAMS})
-            echo Created subnets: ${OCI_FN_SUBNET_1_NAME}, ${OCI_FN_SUBNET_2_NAME}, ${OCI_FN_SUBNET_3_NAME}
+            out "OCI_SUBNET_1=${OCI_SUBNET_1}"          
+            out "OCI_SUBNET_2=${OCI_SUBNET_2}"          
+            out "OCI_SUBNET_3=${OCI_SUBNET_3}"          
+          
 
           #The subnets specified should be public only if function needs internet access
             # and also have appropriate rules in its security list and route table
@@ -98,7 +114,7 @@
             # create internet gateway:
             OCI_FN_INTERNET_GATEWAY_NAME=faas-internet-gateway
             OCI_FN_INTERNET_GATEWAY_ID=$(oci network internet-gateway create --display-name ${OCI_FN_INTERNET_GATEWAY_NAME} --is-enabled true ${VCN_PARAMS})
-            echo Created internet gateway ${OCI_FN_INTERNET_GATEWAY_NAME} with ID ${OCI_FN_INTERNET_GATEWAY_ID}
+            out "OCI_FN_INTERNET_GATEWAY_ID=${OCI_FN_INTERNET_GATEWAY_ID}"
 
           # update default route table: (rule allows all internet traffic to hit the internet gateway we just created)
             ROUTE_RULES="[{\"cidrBlock\":\"0.0.0.0/0\",\"networkEntityId\":\""${OCI_FN_INTERNET_GATEWAY_ID}"\"}]"
@@ -130,30 +146,39 @@
           # 2- kafka-fn-sink worker will use the same user credentials for reading from OSS stream
           # 3- logging into OCI container registry used for docker images of functions
           #Needless to say this user is different than the user executing this script. We could have used credentials of this user too.
-          OCI_FN_USER_NAME=faas_user
-          OCI_FN_GROUP_NAME=faas_user_group
+          OCI_FN_USERNAME=faas_user
+          OCI_FN_USERGROUP_NAME=faas_user_group
           # create group
-          OCI_FN_GROUP_ID=$(oci iam group create --name ${OCI_FN_GROUP_NAME} --description "A group for FaaS users" --region ${OCI_HOME_REGION} --query "data.id" --raw-output)
-          echo Created group ${OCI_FN_GROUP_NAME} with ID ${OCI_FN_GROUP_ID}
+          OCI_FN_USERGROUP_ID=$(oci iam group create --name ${OCI_FN_USERGROUP_NAME} --description "A group for FaaS users" --query "data.id" --raw-output)
+          echo Created group ${OCI_FN_USERGROUP_ID} with ID ${OCI_FN_USERGROUP_ID}
 
           # create user:
-          OCI_FN_USER_ID=$(oci iam user create --name ${OCI_FN_USER_NAME} --description "A user for the FaaS service" --region ${OCI_HOME_REGION} --query "data.id" --raw-output)
-          echo Created user ${OCI_FN_USER_NAME} with ID ${OCI_FN_USER_ID}
+          OCI_FN_USER_ID=$(oci iam user create --name ${OCI_FN_USERNAME} --description "A user for the FaaS service" --wait-for-state ACTIVE --query "data.id" --raw-output)
+          echo Created user ${OCI_FN_USERNAME} with ID ${OCI_FN_USER_ID}
 
           # create user auth token
-          OCI_FN_USER_AUTH_TOKEN=$(oci iam auth-token create --user-id ${OCI_FN_USER_ID} --description "auth token for ${OCI_FN_USER_NAME}" --region ${OCI_HOME_REGION} --query "data.token" --raw-output)
+          OCI_FN_USER_AUTH_TOKEN=$(oci iam auth-token create --user-id ${OCI_FN_USER_ID} --description "auth token for ${OCI_FN_USERNAME}" --region ${OCI_HOME_REGION} --query "data.token" --raw-output)
           echo Created Auth Token.  Remember this token, it can not be retrieved in the future: "${OCI_FN_USER_AUTH_TOKEN}"
 
           # add user to group:
-          oci iam group add-user --group-id ${OCI_FN_GROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} --raw-output --query "data.id"
-          echo Added user ${OCI_FN_USER_NAME} to group ${OCI_FN_GROUP_NAME}
+          oci iam group add-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} --raw-output --query "data.id"
+          echo Added user ${OCI_FN_USERNAME} to group ${OCI_FN_USERGROUP_NAME}
 
           # Create group policy.
           # TODO remove all rights to group ... give access to object storage and streams read, write
-          STATEMENTS="[\"Allow group "${OCI_FN_GROUP_NAME}" to manage all-resources in compartment $OCI_CMPT_NAME \" ,\"Allow group "${OCI_FN_GROUP_NAME}" to manage repos in tenancy\", \"Allow group "${OCI_FN_GROUP_NAME}" to manage functions-family in compartment "${OCI_CMPT_NAME}"\", \"Allow group "${OCI_FN_GROUP_NAME}" to manage vnics in compartment "${OCI_CMPT_NAME}"\", \"Allow group "${OCI_FN_GROUP_NAME}" to inspect subnets in compartment "${OCI_CMPT_NAME}"\"]"
+          STATEMENTS="[\"Allow group "${OCI_FN_USERGROUP_NAME}" to manage all-resources in compartment $OCI_CMPT_NAME \" ,\
+                       \"Allow group "${OCI_FN_USERGROUP_NAME}" to manage repos in tenancy\", \
+                       \"Allow group "${OCI_FN_USERGROUP_NAME}" to manage functions-family in compartment "${OCI_CMPT_NAME}"\", \
+                       \"Allow group "${OCI_FN_USERGROUP_NAME}" to manage vnics in compartment "${OCI_CMPT_NAME}"\", \
+                       \"Allow group "${OCI_FN_USERGROUP_NAME}" to inspect subnets in compartment "${OCI_CMPT_NAME}"\"]"
           echo $STATEMENTS > statements.json
-          OCI_FN_POLICY_ID=$(oci iam policy create --name Policy_for_$OCI_FN_GROUP_NAME --description "A policy for the group ${OCI_FN_GROUP_NAME}" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE --wait-interval-seconds 3)
-          echo Created policy Policy_for_$OCI_FN_GROUP_NAME.  Use the command: \'oci iam policy get --policy-id "${OCI_FN_POLICY_ID}"\' if you want to view the policy.
+          OCI_FN_USERGROUP_POLICY_ID=$(oci iam policy create --name Policy_for_$OCI_FN_USERGROUP_NAME --description "A policy for the group ${OCI_FN_USERGROUP_NAME}" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE --wait-interval-seconds 3)
+          echo Created policy Policy_for_$OCI_FN_USERGROUP_NAME.  Use the command: \'oci iam policy get --policy-id "${OCI_FN_USERGROUP_POLICY_ID}"\' if you want to view the policy.
+
+          out "OCI_FN_USER_ID=${OCI_FN_USER_ID}"
+          out "OCI_FN_USERGROUP_ID=${OCI_FN_USERGROUP_ID}"
+          out "OCI_FN_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN}"
+          out "OCI_FN_USERGROUP_POLICY_ID=${OCI_FN_USERGROUP_POLICY_ID}"
 
 #Create Function App(a logical container for functions). Inside this app, we will create producer and consumer function
 #Consumer function will be triggered by Kafka FnSink connector
@@ -216,7 +241,7 @@
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
             fn update function $FN_APP_NAME review_producer_fn --memory 512 --timeout 120 
 
-#Create Compute Instance for running Kafka Oci Fn Sink Connector   
+#Create Compute Instance for running dockerized Kafka Sink Connector for Oci Fn 
         SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
         SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
 
@@ -244,14 +269,18 @@
             echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_IP     
         #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
         MATCHING_RULE_FOR_DG="ANY {instance.id = '${COMPUTE_OCID}'}"
-        DG_NAME='dg_for_kafka_fn_sink'_$(date "+DATE_%Y_%m_%d_TIME_%H_%M_%S")
+        DG_NAME='dg_for_kafka_fn_sink'_${JobRunId}
         DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
 
         DG_POLICY="[\"Allow dynamic-group dg_for_kafka_fn_sink to use log-content in compartment ${OCI_CMPT_NAME} \"]"
         echo $DG_POLICY > statements.json
         DG_CI_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
         echo Created policy ${DG_CI_POLICY_ID}.  Use the command: \'oci iam policy get --policy-id "${DG_CI_POLICY_ID}"\' if you want to view the policy.
-        rm statements.json                        
+        rm statements.json  
+
+        out "COMPUTE_OCID=${COMPUTE_OCID}"
+        out "DG_CI_ID=${DG_CI_ID}" 
+        out "DG_CI_POLICY_ID=${DG_CI_POLICY_ID}"                     
 
         # transfer env values for docker
         echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
@@ -260,7 +289,7 @@
         echo OCI_STREAM_NAME=${OCI_STREAM_NAME} >> env.json
         echo OCI_STREAM_PARTITIONS_COUNT=${OCI_STREAM_PARTITIONS_COUNT} >> env.json
 
-        echo OCI_USER_ID=${OCI_USER_ID} >> env.json
+        echo OCI_USERNAME=${OCI_FN_USERNAME} >> env.json
         echo OCI_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN} >> env.json
 
         echo FN_APP_NAME=${FN_APP_NAME} >> env.json
@@ -294,6 +323,7 @@
        oci os object list -bn ${BAD_REVIEW_BUCKET_NAME}
 
 
+sleep 3000
 
 #Delete all resources in cmpt
     #delete compute
@@ -316,15 +346,19 @@
 
 
     # TODO delete fn and fn app
-    oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
+    fn delete function $FN_APP_NAME review_producer_fn
+    fn delete function $FN_APP_NAME review_consumer_fn
+    fn delete app $FN_APP_NAME -r --force
+
+    oci iam policy delete --policy-id ${OCI_FN_DG_AND_FAAS_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
     
     #delete user and user-group
-    oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN} --user-id ${OCI_FN_USER_ID} --force
 
     oci iam user delete --user-id {OCI_FN_USER_ID} --force --wait-for-state INACTIVE
-    oci iam group delete --group-id {OCI_FN_GROUP_ID} --force --wait-for-state INACTIVE
+    oci iam group delete --group-id {OCI_FN_USERGROUP_ID} --force --wait-for-state INACTIVE
 
     oci network route-table delete --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --force --wait-for-state TERMINATED
     oci network security-list delete --security-list-id ${OCI_FN_VCN_SECURITY_LIST_ID} --force --wait-for-state TERMINATED

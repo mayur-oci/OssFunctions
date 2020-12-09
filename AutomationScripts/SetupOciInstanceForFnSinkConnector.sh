@@ -33,10 +33,9 @@
     docker version    
 
 # Run dockerized Kafka Connector framework. Note we have yet not configured the FnSinkConnector worker.
-    OCI_STREAM_USERNAME="$OCI_TENANCY_NAME/$OCI_USER_ID/$OCI_STREAM_POOL_ID"
-    KAFKA_SASL_CONFIG="org.apache.kafka.common.security.plain.PlainLoginModule required username=\"${OCI_STREAM_USERNAME}\" password=\"${OCI_USER_AUTH_TOKEN}\";"
-    HOST_IPv4=$(curl ifconfig.me)
-    echo my ip address is $HOST_IPv4
+    OCI_STREAM_USERNAME="$OCI_TENANCY_NAME/$OCI_USERNAME/$OCI_STREAM_POOL_ID"
+    KAFKA_SASL_CONFIG="org.apache.kafka.common.security.plain.PlainLoginModule required \
+                       username=\"${OCI_STREAM_USERNAME}\" password=\"${OCI_USER_AUTH_TOKEN}\";"
 
     FILE=$HOME/.oci
     if [ -d "$FILE" ]; then
