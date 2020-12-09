@@ -9,14 +9,17 @@
           OCI_HOME_REGION=us-ashburn-1
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
           OCI_CURRENT_REGION_CODE=phx
-          OCI_CMPT_NAME=KafkaSinkConnectorForFn_1
           OCI_CLI_PROFILE=DEFAULT
 
 #Common utility functions          
-          JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M_%S")
+          JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M")          
+          ocidList=resourceIdList_For_JobRun_${JobRunId}.txt
           out(){
-            echo $1 | tee -a resourceIdList_For_JobRun_${JobRunId}.txt
+            echo $1 | tee -a ${ocidList}
           }
+
+          OCI_CMPT_NAME=OssFn_${JobRunId}
+
 
 #Create new compartment for this demo...We will create all resources for this demo inside this compartment.
           OCI_CMPT_ID=$(oci iam compartment create --name ${OCI_CMPT_NAME} --compartment-id ${OCI_TENANCY_OCID} \
@@ -66,7 +69,7 @@
           out "OCI_FN_DG_AND_FAAS_POLICY_ID=${OCI_FN_DG_POLICY_ID}"        
           
 
-#Creating subnets for OCI functions and compute instance for Kafka FnSink Connector worker 
+#Creating subnets for 1- OCI functions and 2- compute instance(for Kafka FnSink Connector worker)
           # create VCN:
             echo Creating VCN. This may take a few seconds...
             OCI_FN_VCN_NAME=faas-demo-vcn
@@ -178,6 +181,8 @@
           out "OCI_FN_USER_ID=${OCI_FN_USER_ID}"
           out "OCI_FN_USERGROUP_ID=${OCI_FN_USERGROUP_ID}"
           out "OCI_FN_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN}"
+          OCI_FN_USER_AUTH_TOKEN_OCID=$(oci iam auth-token  list --user-id ${OCI_FN_USER_ID}  --query 'data[0].id')
+          out "OCI_FN_USER_AUTH_TOKEN_OCID=${OCI_FN_USER_AUTH_TOKEN_OCID}"
           out "OCI_FN_USERGROUP_POLICY_ID=${OCI_FN_USERGROUP_POLICY_ID}"
 
 #Create Function App(a logical container for functions). Inside this app, we will create producer and consumer function
@@ -201,7 +206,7 @@
             fn list apps 
 
           #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
-            docker login -u $OCI_TENANCY_NAME/$OCI_USER_ID -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
+            docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
             FN_APP_NAME=fn_oss_app_test
@@ -245,7 +250,7 @@
         SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
         SSH_PRIVATE_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pvt" 
 
-        COMPUTE_SHAPE='VM.Standard1.4'
+        COMPUTE_SHAPE='VM.Standard2.1'
         AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
         echo availability-domain chosen for compute instance: $AD
         #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
@@ -266,15 +271,16 @@
             --instance-id "${COMPUTE_OCID}" \
             --query 'data[0]."public-ip"' \
             --raw-output)
-            echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_IP     
+        echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_PUBLIC_IP     
+        
         #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
-        MATCHING_RULE_FOR_DG="ANY {instance.id = '${COMPUTE_OCID}'}"
-        DG_NAME='dg_for_kafka_fn_sink'_${JobRunId}
-        DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG" --wait-for-state ACTIVE --query "data.id" --raw-output)
+        MATCHING_RULE_FOR_DG_CI="ANY {instance.id = '${COMPUTE_OCID}'}"
+        DG_CI_NAME='dg_for_kafka_fn_sink'_${JobRunId}
+        DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG_CI" --wait-for-state ACTIVE --query "data.id" --raw-output)
 
-        DG_POLICY="[\"Allow dynamic-group dg_for_kafka_fn_sink to use log-content in compartment ${OCI_CMPT_NAME} \"]"
+        DG_POLICY="[\"Allow dynamic-group ${DG_CI_NAME} to manage all-resources in compartment ${OCI_CMPT_NAME} \"]"
         echo $DG_POLICY > statements.json
-        DG_CI_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
+        DG_CI_POLICY_ID=$(oci iam policy create -c $OCI_TENANCY_OCID --name "DG_POLICY_$DG_CI_NAME" --description "A policy for instance" --statements file://`pwd`/statements.json --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE)
         echo Created policy ${DG_CI_POLICY_ID}.  Use the command: \'oci iam policy get --policy-id "${DG_CI_POLICY_ID}"\' if you want to view the policy.
         rm statements.json  
 
@@ -355,7 +361,7 @@ sleep 3000
     
     #delete user and user-group
     oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
-    oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN} --user-id ${OCI_FN_USER_ID} --force
+    oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN_OCID} --user-id ${OCI_FN_USER_ID} --force
 
     oci iam user delete --user-id {OCI_FN_USER_ID} --force --wait-for-state INACTIVE
     oci iam group delete --group-id {OCI_FN_USERGROUP_ID} --force --wait-for-state INACTIVE
