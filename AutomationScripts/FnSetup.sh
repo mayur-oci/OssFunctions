@@ -301,11 +301,21 @@
     oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
     oci compute instance terminate  --instance-id ${COMPUTE_OCID} --force --wait-for-state TERMINATED
     
-    #delete buckets
-    os object list -bn ${GOOD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
-    os object list -bn ${BAD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
 
-    #delete fn and fn app
+    #delete stream
+    oci streaming admin connect-harness delete --connect-harness-id ${OCI_CONNECT_HARNESS_ID} --force --wait-for-state DELETED
+    oci streaming admin stream delete --stream-id ${OCI_STREAM_ID} --force --wait-for-state DELETED
+    oci streaming admin stream-pool delete --stream-pool-id ${OCI_STREAM_POOL_ID} --force --wait-for-state DELETED
+
+    # TODO delete buckets
+    # os object list -bn ${GOOD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
+    # os object list -bn ${BAD_REVIEW_BUCKET_NAME} --all  --query 'data[*].name'
+    # oci os bucket get --bucket-name ${GOOD_REVIEW_BUCKET_NAME} --fields approximateCount --raw-output --query 'data."approximate-count"'
+    # oci os object list -bn ${GOOD_REVIEW_BUCKET_NAME} --all --raw-output  --query 'data[1].name'
+    # oci os bucket get --bucket-name ${BAD_REVIEW_BUCKET_NAME} --fields approximateCount --raw-output --query 'data."approximate-count"'
+
+
+    # TODO delete fn and fn app
     oci iam policy delete --policy-id ${OCI_FN_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
     
@@ -326,6 +336,7 @@
 
     oci network vcn delete --vcn-id ${OCI_FN_VCN_ID} --force --wait-for-state TERMINATING
 
+    oci iam compartment delete -c ${OCI_CMPT_ID} --force --wait-for-state SUCCEEDED
 
 
 
