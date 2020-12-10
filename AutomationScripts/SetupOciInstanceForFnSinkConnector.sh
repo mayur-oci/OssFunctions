@@ -46,6 +46,7 @@
       MOUNT_OCI_CONFIGS_IF_APPLICABLE=""
     fi
 
+    rm -rf OssFunctions
     git clone https://github.com/mayur-oci/OssFunctions
     cd ./OssFunctions/'fn-kafka-connect-sink-connector'
     ./mvnw  install
@@ -68,6 +69,7 @@
       -e CONNECT_INTERNAL_VALUE_CONVERTER="org.apache.kafka.connect.json.JsonConverter" \
       -e CONNECT_KEY_CONVERTER_SCHEMAS_ENABLE=false \
       -e CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false \
+      -e CONNECT_REST_ADVERTISED_HOST_NAME="localhost" \
       -e CONNECT_LOG4J_ROOT_LOGLEVEL="INFO" \
       -e CONNECT_PLUGIN_PATH=/usr/share/java/kafka-connect/ -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1 \
       -e CONNECT_SASL_MECHANISM=PLAIN \

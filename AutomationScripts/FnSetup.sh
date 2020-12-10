@@ -186,6 +186,7 @@
                                      --region ${OCI_HOME_REGION} --raw-output --query "data.id" --wait-for-state ACTIVE --wait-interval-seconds 3 \
                                      -c ${OCI_TENANCY_OCID})
           echo Created policy Policy_for_$OCI_FN_USERGROUP_NAME.  Use the command: \'oci iam policy get --policy-id "${OCI_FN_USERGROUP_POLICY_ID}"\' if you want to view the policy.
+          rm statements.json
 
           out "OCI_FN_USER_ID=${OCI_FN_USER_ID}"
           out "OCI_FN_USERGROUP_ID=${OCI_FN_USERGROUP_ID}"
@@ -206,7 +207,7 @@
             fn update context oracle.profile $OCI_CLI_PROFILE # make sure to update your local ~./oci/config file with api and other credentials for this user
           
             #Docker setup for fn platform
-            OCI_DOCKER_REGISTRY_URL="https://${OCI_CURRENT_REGION_CODE}.ocir.io"  # OCI docker registry URL. It is region specific e.g. for Ashburn iad.ocir.io
+            OCI_DOCKER_REGISTRY_URL="${OCI_CURRENT_REGION_CODE}.ocir.io"  # OCI docker registry URL. It is region specific e.g. for Ashburn iad.ocir.io
             FN_DOCKER_REPO_NAME=docker_repo_fn_oss_test # Your docker repo name...will be created when we push fn docker image
             FN_DOCKER_REPO_URL=$OCI_DOCKER_REGISTRY_URL/$OCI_TENANCY_NAME/$FN_DOCKER_REPO_NAME
             fn update context registry $FN_DOCKER_REPO_URL
@@ -246,13 +247,14 @@
 
           #Fetch the function code from github and actually deploy it in OCI Fn platform
             FN_REPO_NAME=OssFunctions
+            rm -rf OssFunctions
             FN_GITHUB_URL="https://github.com/mayur-oci/${FN_REPO_NAME}.git"
             git clone $FN_GITHUB_URL
-             
-            fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn
-            fn update function $FN_APP_NAME review_consumer_fn --memory 512 --timeout 120
             
+            fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn            
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
+
+            fn update function $FN_APP_NAME review_consumer_fn --memory 512 --timeout 120
             fn update function $FN_APP_NAME review_producer_fn --memory 512 --timeout 120 
 
 #Create Compute Instance for running dockerized Kafka Sink Connector for Oci Fn 
@@ -315,13 +317,19 @@
         cat env.json > kafkaConnector.sh 
         curl -O "https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
         cat SetupOciInstanceForFnSinkConnector.sh >> kafkaConnector.sh ; chmod 777 kafkaConnector.sh
-        rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
-        scp -i $SSH_PRIVATE_KEY_LOCATION -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" ./kafkaConnector.sh opc@$COMPUTE_PUBLIC_IP:~/
+        scp -i ${SSH_PRIVATE_KEY_LOCATION} -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" ./kafkaConnector.sh opc@$COMPUTE_PUBLIC_IP:~/
 
         ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
                       -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
                       -o "StrictHostKeyChecking no" \
                       "sudo sh ~/kafkaConnector.sh"  
+                      
+        ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
+                      -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
+                      -o "StrictHostKeyChecking no" \
+                      'tail -f /home/opc/kafka.log' &
+              
+        rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
 
 
 #Invoke Producer Function

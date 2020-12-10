@@ -24,6 +24,38 @@
     "source-type": "CIDR_BLOCK",
     "tcp-options": {
       "destination-port-range": {
+        "max": 8082,
+        "min": 8082
+      },
+      "source-port-range": null
+    },
+    "udp-options": null
+  },
+  {
+    "description": null,
+    "icmp-options": null,
+    "is-stateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "source-type": "CIDR_BLOCK",
+    "tcp-options": {
+      "destination-port-range": {
+        "max": 9092,
+        "min": 9092
+      },
+      "source-port-range": null
+    },
+    "udp-options": null
+  },
+  {
+    "description": null,
+    "icmp-options": null,
+    "is-stateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "source-type": "CIDR_BLOCK",
+    "tcp-options": {
+      "destination-port-range": {
         "max": 22,
         "min": 22
       },
