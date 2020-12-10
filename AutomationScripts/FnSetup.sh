@@ -286,8 +286,8 @@
         
         #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
         MATCHING_RULE_FOR_DG_CI="ANY {instance.id = '${COMPUTE_OCID}'}"
-        DG_CI_NAME='dg_for_kafka_fn_sink'_${JobRunId}
-        DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name 'dg_for_kafka_fn_sink' --matching-rule "$MATCHING_RULE_FOR_DG_CI" --wait-for-state ACTIVE --query "data.id" --raw-output)
+        DG_CI_NAME=dg_for_kafka_fn_sink_${JobRunId}
+        DG_CI_ID=$(oci --region $OCI_HOME_REGION iam dynamic-group create --description 'dg_for_kafka_fn_sink' --name ${DG_CI_NAME} --matching-rule "$MATCHING_RULE_FOR_DG_CI" --wait-for-state ACTIVE --query "data.id" --raw-output)
 
         DG_CI_POLICY="[\"Allow dynamic-group ${DG_CI_NAME} to manage all-resources in compartment ${OCI_CMPT_NAME} \"]"
         echo $DG_CI_POLICY > statements.json
@@ -301,13 +301,16 @@
 
         # transfer env values for docker
         echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
+        echo OCI_CURRENT_REGION=${OCI_CURRENT_REGION} >> env.json
+        echo OCI_CMPT_ID=${OCI_CMPT_ID} >> env.json
+
         echo CONNECT_HARNESS_OCID=${OCI_CONNECT_HARNESS_ID} >> env.json
         echo OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID} >> env.json
         echo OCI_STREAM_NAME=${OCI_STREAM_NAME} >> env.json
         echo OCI_STREAM_PARTITIONS_COUNT=${OCI_STREAM_PARTITIONS_COUNT} >> env.json
 
         echo OCI_USERNAME=${OCI_FN_USERNAME} >> env.json
-        echo OCI_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN} >> env.json
+        echo OCI_USER_AUTH_TOKEN=\"${OCI_FN_USER_AUTH_TOKEN}\" >> env.json
 
         echo FN_APP_NAME=${FN_APP_NAME} >> env.json
         echo FN_CONSUMER_FUNCTION_NAME=review_consumer_fn >> env.json
@@ -323,13 +326,13 @@
                       -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
                       -o "StrictHostKeyChecking no" \
                       "sudo sh ~/kafkaConnector.sh"  
-                      
+
         ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
                       -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
                       -o "StrictHostKeyChecking no" \
                       'tail -f /home/opc/kafka.log' &
               
-        rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
+        # rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
 
 
 #Invoke Producer Function
