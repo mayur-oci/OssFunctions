@@ -14,7 +14,7 @@ import java.util.UUID;
 public class OssProducer {
     static String bootstrapServers = System.getenv().get("OCI_OSS_KAFKA_BOOTSTRAP_SERVERS");
     static String tenancyName = System.getenv().get("OCI_FN_TENANCY");
-    static String username = System.getenv().get("OCI_USER_ID");
+    static String username = System.getenv().get("OCI_USERNAME");
     static String streamPoolId = System.getenv().get("STREAM_POOL_OCID");
     static String authToken = System.getenv().get("OCI_AUTH_TOKEN");
     static String streamOrKafkaTopicName = System.getenv().get("REVIEWS_STREAM_OR_TOPIC_NAME");

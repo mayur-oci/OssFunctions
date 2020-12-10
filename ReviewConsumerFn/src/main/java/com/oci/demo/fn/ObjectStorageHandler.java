@@ -21,7 +21,7 @@ import java.util.Map;
 
 class ObjectStorageHandler {
     static String ociObjectStorageNamespace = System.getenv().get("OCI_OBJECT_STORAGE_NAMESPACE");
-    static String goodReviewsBucket = System.getenv().get("GOOD_REVIEW_BUCKET_NAME");
+    static String goodReviewsBucket = System.getenv().get("GOOD_REVIEWS_BUCKET_NAME");
     static String badReviewsBucket = System.getenv().get("BAD_REVIEWS_BUCKET_NAME");
     static String regionForBucket = System.getenv().get("OCI_OBJECT_STORAGE_REGION");
 
