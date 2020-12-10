@@ -83,9 +83,9 @@
       -e CONNECT_CONSUMER_SASL_JAAS_CONFIG="${KAFKA_SASL_CONFIG}" \
       -e KAFKA_HEAP_OPTS="-Xms2024M -Xmx4G -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:9092" \
       ${MOUNT_OCI_CONFIGS_IF_APPLICABLE} \
-      kafka-connect-fn-sink:latest  > /home/opc/kafka.log&
+      kafka-connect-fn-sink:latest  > /tmp/kafka.log&
 
-      tail -f /home/opc/kafka.log
+      tail -f /tmp/kafka.log
 
         curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
         echo "Connector $FN_CONNECTOR_NAME deleted"
