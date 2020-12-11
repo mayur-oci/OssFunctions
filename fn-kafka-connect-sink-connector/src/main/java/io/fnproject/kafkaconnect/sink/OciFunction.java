@@ -111,7 +111,7 @@ public class OciFunction {
 
     static boolean invokeFunction(String payload) {
         try {
-            System.err.println("Invoking function endpoint - " + fn.getInvokeEndpoint());
+            System.out.println("Invoking function endpoint - " + fn.getInvokeEndpoint());
 
             // Configure the client to use the assigned function endpoint.
             final InvokeFunctionRequest invokeFunctionRequest =

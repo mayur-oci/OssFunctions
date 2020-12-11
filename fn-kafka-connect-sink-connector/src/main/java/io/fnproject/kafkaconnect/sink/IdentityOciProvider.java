@@ -32,6 +32,7 @@ public class IdentityOciProvider {
 
         try {
             provider = InstancePrincipalsAuthenticationDetailsProvider.builder().build();
+            System.out.println(" Oci Instance provider success ");
         } catch (Exception e) {
             System.out.println(" Oci Instance provider failed ");
         }

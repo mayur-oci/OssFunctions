@@ -14,7 +14,7 @@ public class FnInvocationTask extends SinkTask {
     @Override
     public void start(Map<String, String> config) {
         this.config = config;
-        OciFunction.initialize(config);
+        //OciFunction.initialize(config);
         System.out.println("Task started with config... " + config);
     }
 
