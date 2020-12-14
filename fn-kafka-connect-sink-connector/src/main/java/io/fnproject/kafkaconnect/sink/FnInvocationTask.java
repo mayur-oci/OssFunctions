@@ -14,7 +14,6 @@ public class FnInvocationTask extends SinkTask {
     @Override
     public void start(Map<String, String> config) {
         this.config = config;
-        //OciFunction.initialize(config);
         System.out.println("Task started with config... " + config);
     }
 
@@ -39,7 +38,12 @@ public class FnInvocationTask extends SinkTask {
                 System.out.println("Message with value:->  " + record.value());
                 Gson gson = new Gson();
                 String json = gson.toJson(record.value());
-                OciFunction.invokeFunction(json);
+                //OciFunction.invokeFunction(json);
+                try {
+                    Invoker.invoker.blockingQueue.put(json);
+                } catch (Exception e) {
+                    System.out.println(" ERROR: error when reflectively invoking Functions " + e);
+                }
             }
         }
     }
@@ -47,7 +51,13 @@ public class FnInvocationTask extends SinkTask {
 
     @Override
     public void stop() {
-        OciFunction.closeFn();
+//        try {
+//            Method m = FnSinkConnector.ociFunctionClass.getDeclaredMethod("closeFn");
+//            m.invoke(null, null);
+//            System.out.println(" Success: error when reflectively CloseFn ");
+//        } catch (Exception e) {
+//            System.out.println(" ERROR: error when reflectively CloseFn " + e);
+//        }
         System.out.println("FnSink Task stopped... ");
     }
 

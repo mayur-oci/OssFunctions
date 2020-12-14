@@ -30,21 +30,20 @@ partitions and call your functions - which will result in 5 function instances a
 ### Kafka
 
 - Start Kafka
-  - `docker run -d --rm --name kafka --net=host -e KAFKA_BROKER_ID=1 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_ZOOKEEPER_CONNECT=localhost:2181 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 confluentinc/cp-kafka`
+    - `docker run -d --rm --name kafka --net=host -e KAFKA_BROKER_ID=1 -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 -e KAFKA_ZOOKEEPER_CONNECT=localhost:2181 -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 confluentinc/cp-kafka`
 - Check - `docker logs kafka`
 - Create topic
-  - `docker run --net=host --rm confluentinc/cp-kafka kafka-topics --create --topic test-sink-topic --partitions 4 --replication-factor 1 --if-not-exists --zookeeper localhost:2181`
+    - `docker run --net=host --rm confluentinc/cp-kafka kafka-topics --create --topic test-sink-topic --partitions 4 --replication-factor 1 --if-not-exists --zookeeper localhost:2181`
 
 `Created topic "test-sink-topic".`
 
 - check
-  - `docker run --net=host --rm confluentinc/cp-kafka kafka-topics --describe --topic test-sink-topic --zookeeper localhost:2181`
+    - `docker run --net=host --rm confluentinc/cp-kafka kafka-topics --describe --topic test-sink-topic --zookeeper localhost:2181`
 
-  	Topic:test-sink-topic   PartitionCount:4        ReplicationFactor:1     Configs:
-  	        Topic: test-sink-topic  Partition: 0    Leader: 1       Replicas: 1     Isr: 1
-  	        Topic: test-sink-topic  Partition: 1    Leader: 1       Replicas: 1     Isr: 1
-  	        Topic: test-sink-topic  Partition: 2    Leader: 1       Replicas: 1     Isr: 1
-  	        Topic: test-sink-topic  Partition: 3    Leader: 1       Replicas: 1     Isr: 1
+      Topic:test-sink-topic PartitionCount:4 ReplicationFactor:1 Configs:
+      Topic: test-sink-topic Partition: 0 Leader: 1 Replicas: 1 Isr: 1 Topic: test-sink-topic Partition: 1 Leader: 1
+      Replicas: 1 Isr: 1 Topic: test-sink-topic Partition: 2 Leader: 1 Replicas: 1 Isr: 1 Topic: test-sink-topic
+      Partition: 3 Leader: 1 Replicas: 1 Isr: 1
 
 ## Kafka Connect Connector
 
@@ -60,19 +59,17 @@ partitions and call your functions - which will result in 5 function instances a
 
 - Copy your private key to current folder
 - build Kafka Connect container (with custom Connector)
-  - `docker build --build-arg PRIVATE_KEY_NAME=<your_private_key> -t fn-kafka-connect-sink .`
-  e.g. `docker build --build-arg PRIVATE_KEY_NAME=private_key.pem -t fn-kafka-connect-sink .`
+    - `docker build --build-arg PRIVATE_KEY_NAME=<your_private_key> -t fn-kafka-connect-sink .`
+      e.g. `docker build --build-arg PRIVATE_KEY_NAME=private_key.pem -t fn-kafka-connect-sink .`
 
-  	....
-  	Successfully built bea369ecb8b4
-  	Successfully tagged fn-kafka-connect-sink:latest
+      .... Successfully built bea369ecb8b4 Successfully tagged fn-kafka-connect-sink:latest
 
 ### Install
 
 > `CONNECT_BOOTSTRAP_SERVERS` can also point to an existing Kafka cluster (make sure you have created the
 
 - Start Kafka Connect in docker
-  - `docker run --rm -it --name=kafka-connect --net=host -e CONNECT_BOOTSTRAP_SERVERS=localhost:9092 -e CONNECT_REST_PORT=8082 -e CONNECT_GROUP_ID="default" -e CONNECT_CONFIG_STORAGE_TOPIC="default.config" -e CONNECT_OFFSET_STORAGE_TOPIC="default.offsets" -e CONNECT_STATUS_STORAGE_TOPIC="default.status" -e CONNECT_KEY_CONVERTER="org.apache.kafka.connect.storage.StringConverter" -e CONNECT_VALUE_CONVERTER="org.apache.kafka.connect.storage.StringConverter" -e CONNECT_INTERNAL_KEY_CONVERTER="org.apache.kafka.connect.json.JsonConverter" -e CONNECT_INTERNAL_VALUE_CONVERTER="org.apache.kafka.connect.json.JsonConverter" -e CONNECT_REST_ADVERTISED_HOST_NAME="localhost" -e CONNECT_PLUGIN_PATH=/usr/share/java,/etc/kafka-connect/jars -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1 fn-kafka-connect-sink`
+    - `docker run --rm -it --name=kafka-connect --net=host -e CONNECT_BOOTSTRAP_SERVERS=localhost:9092 -e CONNECT_REST_PORT=8082 -e CONNECT_GROUP_ID="default" -e CONNECT_CONFIG_STORAGE_TOPIC="default.config" -e CONNECT_OFFSET_STORAGE_TOPIC="default.offsets" -e CONNECT_STATUS_STORAGE_TOPIC="default.status" -e CONNECT_KEY_CONVERTER="org.apache.kafka.connect.storage.StringConverter" -e CONNECT_VALUE_CONVERTER="org.apache.kafka.connect.storage.StringConverter" -e CONNECT_INTERNAL_KEY_CONVERTER="org.apache.kafka.connect.json.JsonConverter" -e CONNECT_INTERNAL_VALUE_CONVERTER="org.apache.kafka.connect.json.JsonConverter" -e CONNECT_REST_ADVERTISED_HOST_NAME="localhost" -e CONNECT_PLUGIN_PATH=/usr/share/java,/etc/kafka-connect/jars -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1 fn-kafka-connect-sink`
 
 - keep following info ready
     - URL of your function and replace `<FUNCTION_URL>` in below command

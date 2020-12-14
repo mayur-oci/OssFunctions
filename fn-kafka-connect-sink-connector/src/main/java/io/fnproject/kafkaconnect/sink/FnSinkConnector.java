@@ -10,16 +10,28 @@ import java.util.List;
 import java.util.Map;
 
 public class FnSinkConnector extends SinkConnector {
+    public static Class<OciFunction> ociFunctionClass = null;
     private Map<String, String> configProperties;
 
     @Override
     public void start(Map<String, String> config) {
         this.configProperties = config;
-        IdentityOciProvider.initialize(config);
-        OciFunction.initialize(config);
-        System.out.println("INFO FnSinkConnector started with config " + config +
-                " and identity " + IdentityOciProvider.provider);
+
+
+        try {
+            System.out.println("System cl " + ClassLoader.getSystemClassLoader().getClass().getCanonicalName());
+            System.out.println("FnConnector cl name " + FnSinkConnector.class.getClassLoader().getClass().getCanonicalName());
+            System.out.println("Kafka Plugin Launcher thread cl " + Thread.currentThread().getContextClassLoader().getClass().getCanonicalName());
+
+            //System.exit(1);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+        new Invoker(config).start();
     }
+
 
     @Override
     public Class<? extends Task> taskClass() {

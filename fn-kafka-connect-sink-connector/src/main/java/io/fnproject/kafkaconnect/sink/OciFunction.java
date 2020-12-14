@@ -1,6 +1,10 @@
 package io.fnproject.kafkaconnect.sink;
 
+import com.oracle.bmc.ConfigFileReader;
 import com.oracle.bmc.Region;
+import com.oracle.bmc.auth.BasicAuthenticationDetailsProvider;
+import com.oracle.bmc.auth.ConfigFileAuthenticationDetailsProvider;
+import com.oracle.bmc.auth.InstancePrincipalsAuthenticationDetailsProvider;
 import com.oracle.bmc.functions.FunctionsInvokeClient;
 import com.oracle.bmc.functions.FunctionsManagementClient;
 import com.oracle.bmc.functions.model.ApplicationSummary;
@@ -13,7 +17,9 @@ import com.oracle.bmc.functions.responses.ListApplicationsResponse;
 import com.oracle.bmc.functions.responses.ListFunctionsResponse;
 import com.oracle.bmc.util.StreamUtils;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 
+import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
@@ -24,8 +30,15 @@ public class OciFunction {
     private static FunctionsManagementClient fnManagementClient = null;
     private static FunctionSummary fn = null;
 
-    static void initialize(Map<String, String> connectorConfig) {
+    static void init(Map<String, String> connectorConfig) {
         try {
+
+            Class<?> classVar = OciFunction.class;
+            System.out.println("Current Class Loader : " + classVar.getClassLoader().getClass().getName());
+            //System.out.println("Parent Class Loader : "+ classVar.getClassLoader().getParent().getClass().getName());
+
+            IdentityOciProvider.initialize(connectorConfig);
+
             config = connectorConfig;
             fnManagementClient =
                     new FunctionsManagementClient(IdentityOciProvider.provider);
@@ -144,4 +157,35 @@ public class OciFunction {
     }
 
 
+    private static class IdentityOciProvider {
+        // OCI Auth provider is needed for accessing Object Storage
+        static BasicAuthenticationDetailsProvider provider = null;
+
+        static void initialize(Map<String, String> connectorConfig) {
+            try {
+                if (StringUtils.isNotEmpty(connectorConfig.get(FnInvocationConfig.OCI_LOCAL_CONFIG))) {
+                    String configFilePath = connectorConfig.get(FnInvocationConfig.OCI_LOCAL_CONFIG) + "/.oci/config";
+                    System.out.println("CONFIG_FILE_PATH:" + configFilePath);
+                    File file = new File(configFilePath);
+                    if (file.exists()) {
+                        final ConfigFileReader.ConfigFile configFile = ConfigFileReader.parse(file.getAbsolutePath(), "DEFAULT");
+                        provider = new ConfigFileAuthenticationDetailsProvider(configFile);
+                        System.out.println(" Oci Config provider created: " + provider);
+                        return;
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println(" Oci Config provider failed, will try instance provider ");
+            }
+
+            try {
+                provider = InstancePrincipalsAuthenticationDetailsProvider.builder().build();
+                System.out.println(" Oci Instance provider success ");
+            } catch (Exception e) {
+                System.out.println(" Oci Instance provider failed ");
+            }
+
+            return;
+        }
+    }
 }
