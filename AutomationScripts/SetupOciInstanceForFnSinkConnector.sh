@@ -48,18 +48,20 @@
 
     rm -rf OssFunctions
     git clone https://github.com/mayur-oci/OssFunctions
-    cd ./OssFunctions/'fn-kafka-connect-sink-connector'
-    ./mvnw  install
 
-    docker build -t kafka-connect-fn-sink .
+    cd OssFunctions
+    ./AutomationScripts/mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
+    ./AutomationScripts/mvnw install -f ./OciFnSDK/pom.xml
 
-    nohup docker run  --rm  \
+   docker build -t kafka-connect-fn-sink -f ./AutomationScripts/Dockerfile .
+
+   nohup docker run  --rm  \
       --name=KafkaConnect \
       -p 8082:8082 \
       -p 9092:9092 \
       -e CONNECT_BOOTSTRAP_SERVERS=cell-1.streaming.us-phoenix-1.oci.oraclecloud.com:9092 \
       -e CONNECT_REST_PORT=8082 \
-      -e CONNECT_GROUP_ID="newCG100_abc" \
+      -e CONNECT_GROUP_ID="newCG100_Test" \
       -e CONNECT_CONFIG_STORAGE_TOPIC="$CONNECT_HARNESS_OCID-config" \
       -e CONNECT_OFFSET_STORAGE_TOPIC="$CONNECT_HARNESS_OCID-offset" \
       -e CONNECT_STATUS_STORAGE_TOPIC="$CONNECT_HARNESS_OCID-status" \
