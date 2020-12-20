@@ -50,8 +50,8 @@
     git clone https://github.com/mayur-oci/OssFunctions
 
     cd OssFunctions
-    ./AutomationScripts/mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
-    ./AutomationScripts/mvnw install -f ./OciFnSDK/pom.xml
+    ./mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
+    ./mvnw install -f ./OciFnSDK/pom.xml
 
    docker build -t kafka-connect-fn-sink -f ./AutomationScripts/Dockerfile .
 
