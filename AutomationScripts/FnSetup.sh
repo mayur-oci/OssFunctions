@@ -338,7 +338,7 @@
 #Invoke Producer Function
         echo -n '{"reviewId": "REV_100", "time": 200010000000000, \
         "productId": "PRODUCT_100", "reviewContent": "review content"}' \
-        | fn invoke $FN_APP_NAME review_producer_fn 
+        | fn -v invoke $FN_APP_NAME review_producer_fn 
 
         echo -n '{"reviewId": "REV_200", "time": 200010000000100, \
         "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \

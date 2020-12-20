@@ -1,4 +1,4 @@
-package io.fnproject.kafkaconnect.sink;
+package oci.fnsdk.wrapper;
 
 import com.oracle.bmc.ConfigFileReader;
 import com.oracle.bmc.Region;
@@ -22,31 +22,52 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Set;
 
 public class OciFunction {
+    static final String OCI_REGION_FOR_FUNCTION = "ociRegionForFunction";
+    static final String OCI_COMPARTMENT_ID_FOR_FUNCTION = "ociCompartmentIdForFunction";
+    static final String FUNCTION_APP_NAME = "functionAppName";
+    static final String FUNCTION_NAME = "functionName";
+    static final String OCI_LOCAL_CONFIG = "ociLocalConfig";
 
     private static Map<String, String> config;
     private static FunctionsInvokeClient fnInvokeClient = null;
     private static FunctionsManagementClient fnManagementClient = null;
     private static FunctionSummary fn = null;
 
-    static void init(Map<String, String> connectorConfig) {
+
+    public static void main(String args[]) {
+        long startTime = System.currentTimeMillis();
+        config = System.getenv();
+
+        Set<Map.Entry<String, String>> entrySet = config.entrySet();
+        for (Map.Entry<String, String> entry : entrySet) {
+            System.out.println("Key - " + entry.getKey() + ", Value - " + entry.getValue());
+        }
+
+        init();
+        boolean successOrFail = invokeFunction(config.get("review"));
+        if (successOrFail) {
+            System.out.println("Success from OciFnSDK, time taken in millis: " + (System.currentTimeMillis() - startTime));
+            System.exit(0);
+        }
+
+        System.out.println("Failure from OciFnSDK, time taken: " + (System.currentTimeMillis() - startTime));
+        System.exit(1);
+    }
+
+    static void init() {
         try {
+            IdentityOciProvider.initialize(config);
 
-            Class<?> classVar = OciFunction.class;
-            System.out.println("Current Class Loader : " + classVar.getClassLoader().getClass().getName());
-            //System.out.println("Parent Class Loader : "+ classVar.getClassLoader().getParent().getClass().getName());
-
-            IdentityOciProvider.initialize(connectorConfig);
-
-            config = connectorConfig;
             fnManagementClient =
                     new FunctionsManagementClient(IdentityOciProvider.provider);
-            fnManagementClient.setRegion(Region.fromRegionCodeOrId(config.get(FnInvocationConfig.OCI_REGION_FOR_FUNCTION)));
+            fnManagementClient.setRegion(Region.fromRegionCodeOrId(config.get(OCI_REGION_FOR_FUNCTION)));
             fnInvokeClient = new FunctionsInvokeClient(IdentityOciProvider.provider);
 
-            fn = getUniqueFunctionByName(fnManagementClient, config.get(FnInvocationConfig.OCI_COMPARTMENT_ID_FOR_FUNCTION),
-                    config.get(FnInvocationConfig.FUNCTION_APP_NAME), config.get(FnInvocationConfig.FUNCTION_NAME));
+            fn = getUniqueFunctionByName(fnManagementClient, config.get(OCI_COMPARTMENT_ID_FOR_FUNCTION),
+                    config.get(FUNCTION_APP_NAME), config.get(FUNCTION_NAME));
             fnInvokeClient.setEndpoint(fn.getInvokeEndpoint());
             System.out.println("OciFunction initialize success.");
         } catch (Exception e) {
@@ -163,8 +184,8 @@ public class OciFunction {
 
         static void initialize(Map<String, String> connectorConfig) {
             try {
-                if (StringUtils.isNotEmpty(connectorConfig.get(FnInvocationConfig.OCI_LOCAL_CONFIG))) {
-                    String configFilePath = connectorConfig.get(FnInvocationConfig.OCI_LOCAL_CONFIG) + "/.oci/config";
+                if (StringUtils.isNotEmpty(connectorConfig.get(OCI_LOCAL_CONFIG))) {
+                    String configFilePath = connectorConfig.get(OCI_LOCAL_CONFIG) + "/.oci/config";
                     System.out.println("CONFIG_FILE_PATH:" + configFilePath);
                     File file = new File(configFilePath);
                     if (file.exists()) {
@@ -189,3 +210,4 @@ public class OciFunction {
         }
     }
 }
+
