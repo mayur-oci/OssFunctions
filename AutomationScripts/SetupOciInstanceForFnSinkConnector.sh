@@ -51,7 +51,7 @@
 
     cd OssFunctions
     ./mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
-    ./mvnw install -f ./OciFnSDK/pom.xml
+    ./mvnw install -f ./OciFnSdk/pom.xml
 
    docker build -t kafka-connect-fn-sink -f ./AutomationScripts/Dockerfile .
 
@@ -73,7 +73,7 @@
       -e CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE=false \
       -e CONNECT_REST_ADVERTISED_HOST_NAME="localhost" \
       -e CONNECT_LOG4J_ROOT_LOGLEVEL="INFO" \
-      -e CONNECT_PLUGIN_PATH=/usr/share/java/FnSinkConnector/ -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1 \
+      -e CONNECT_PLUGIN_PATH=/usr/share/java/kafka-connect/ -e CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_STATUS_STORAGE_REPLICATION_FACTOR=1 -e CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR=1 \
       -e CONNECT_SASL_MECHANISM=PLAIN \
       -e CONNECT_SECURITY_PROTOCOL=SASL_SSL \
       -e CONNECT_SASL_JAAS_CONFIG="${KAFKA_SASL_CONFIG}" \
