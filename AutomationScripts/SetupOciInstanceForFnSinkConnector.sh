@@ -35,7 +35,7 @@
 # Run dockerized Kafka Connector framework. Note we have yet not configured the FnSinkConnector worker.
     OCI_STREAM_USERNAME="$OCI_TENANCY_NAME/$OCI_USERNAME/$OCI_STREAM_POOL_ID"
     KAFKA_SASL_CONFIG="org.apache.kafka.common.security.plain.PlainLoginModule required \
-                       username=\"${OCI_STREAM_USERNAME}\" password=\"${OCI_USER_AUTH_TOKEN}\";"
+                        username=\"${OCI_STREAM_USERNAME}\" password=\"${OCI_USER_AUTH_TOKEN}\";"
 
     FILE=$HOME/.oci
     if [ -d "$FILE" ]; then
@@ -53,9 +53,9 @@
     ./mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
     ./mvnw install -f ./OciFnSdk/pom.xml
 
-   docker build -t kafka-connect-fn-sink -f ./AutomationScripts/Dockerfile .
+    docker build -t kafka-connect-fn-sink -f ./AutomationScripts/Dockerfile .
 
-   nohup docker run  --rm  \
+    nohup docker run  --rm  \
       --name=KafkaConnect \
       -p 8082:8082 \
       -p 9092:9092 \
@@ -87,26 +87,26 @@
       ${MOUNT_OCI_CONFIGS_IF_APPLICABLE} \
       kafka-connect-fn-sink:latest  > /tmp/kafka.log&
 
-      tail -f /tmp/kafka.log
+    tail -f /tmp/kafka.log
 
-        curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
-        echo "Connector $FN_CONNECTOR_NAME deleted"
+    curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
+    echo "Connector $FN_CONNECTOR_NAME deleted"
 
-        curl -X POST \
-          http://localhost:8082/connectors \
-          -H 'content-type: application/json' \
-          -d "{
-          \"name\": \"${FN_CONNECTOR_NAME}\",
-          \"config\": {
-            \"connector.class\": \"io.fnproject.kafkaconnect.sink.FnSinkConnector\",
-            \"tasks.max\": \"${OCI_STREAM_PARTITIONS_COUNT}\",
-            \"topics\": \"${OCI_STREAM_NAME}\",
-            \"ociRegionForFunction\": \"${OCI_CURRENT_REGION}\",
-            \"ociCompartmentIdForFunction\": \"${OCI_CMPT_ID}\",
-            \"functionAppName\": \"${FN_APP_NAME}\",
-            \"functionName\": \"${FN_CONSUMER_FUNCTION_NAME}\",
-            \"ociLocalConfig\": \"${HOME}\"
-          }
-        }"
+    curl -X POST \
+      http://localhost:8082/connectors \
+      -H 'content-type: application/json' \
+      -d "{
+      \"name\": \"${FN_CONNECTOR_NAME}\",
+      \"config\": {
+        \"connector.class\": \"io.fnproject.kafkaconnect.sink.FnSinkConnector\",
+        \"tasks.max\": \"${OCI_STREAM_PARTITIONS_COUNT}\",
+        \"topics\": \"${OCI_STREAM_NAME}\",
+        \"ociRegionForFunction\": \"${OCI_CURRENT_REGION}\",
+        \"ociCompartmentIdForFunction\": \"${OCI_CMPT_ID}\",
+        \"functionAppName\": \"${FN_APP_NAME}\",
+        \"functionName\": \"${FN_CONSUMER_FUNCTION_NAME}\",
+        \"ociLocalConfig\": \"${HOME}\"
+      }
+    }"
 
 
