@@ -12,11 +12,9 @@ import java.util.Collection;
 import java.util.Map;
 
 public class FnInvocationTask extends SinkTask {
-    private Map<String, String> config;
-
     ZContext zcontext = null;
     ZMQ.Socket socket = null;
-
+    private Map<String, String> config;
 
     @Override
     public void start(Map<String, String> config) {
@@ -59,18 +57,17 @@ public class FnInvocationTask extends SinkTask {
     }
 
 
-
-    private synchronized void sendZmqMessage(String review){
+    private synchronized void sendZmqMessage(String review) {
         try {
             System.out.println("Sending review " + review);
             socket.send(review.getBytes(ZMQ.CHARSET), 0);
 
             byte[] reply = socket.recv(0);
-            System.out.println("Received " +
-                    new String(reply, ZMQ.CHARSET) + " for review " + review);
+            System.out.println("Received -> " +
+                    new String(reply, ZMQ.CHARSET) + " for review -> " + review);
 
-        }catch (Exception e){
-            System.out.println("Error in sendZmqMessage "+ e);
+        } catch (Exception e) {
+            System.out.println("Error in sendZmqMessage " + e);
         }
     }
 

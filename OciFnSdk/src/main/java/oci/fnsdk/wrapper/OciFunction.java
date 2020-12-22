@@ -18,10 +18,9 @@ import com.oracle.bmc.functions.responses.ListFunctionsResponse;
 import com.oracle.bmc.util.StreamUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
-
 import org.zeromq.SocketType;
-import org.zeromq.ZMQ;
 import org.zeromq.ZContext;
+import org.zeromq.ZMQ;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -55,18 +54,10 @@ public class OciFunction {
 
         zmqHandler();
 
-//        boolean successOrFail = invokeFunction(config.get("review"));
-//        if (successOrFail) {
-//            System.out.println("Success from OciFnSDK, time taken in millis: " + (System.currentTimeMillis() - startTime));
-//            System.exit(0);
-//        }
-//
-//        System.out.println("Failure from OciFnSDK, time taken: " + (System.currentTimeMillis() - startTime));
-//        System.exit(1);
     }
 
-    static void zmqHandler(){
-        try  {
+    static void zmqHandler() {
+        try {
             //  Socket to talk to clients
             ZContext context = new ZContext();
             ZMQ.Socket socket = context.createSocket(SocketType.REP);
@@ -74,19 +65,15 @@ public class OciFunction {
 
             while (!Thread.currentThread().isInterrupted()) {
                 byte[] reply = socket.recv(0);
-                String review=new String(reply, ZMQ.CHARSET);
-                System.out.println(
-                        "Received " + ": [" + new String(reply, ZMQ.CHARSET) + "]"
-                );
+                String review = new String(reply, ZMQ.CHARSET);
+                System.out.println("Received " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
                 String response = invokeFunction(review).toString();
                 socket.send(response.getBytes(ZMQ.CHARSET), 0);
             }
-        }
-        catch (Exception e){
-            System.out.println(" Exception in zmqHandler "+e);
+        } catch (Exception e) {
+            System.out.println(" Exception in zmqHandler:: " + e);
         }
     }
-
 
 
     static void init() {
@@ -244,8 +231,8 @@ public class OciFunction {
     class ReviewClassifierFn implements Callable<Boolean> {
         String review;
 
-        ReviewClassifierFn(String review){
-            this.review=review;
+        ReviewClassifierFn(String review) {
+            this.review = review;
         }
 
         @Override

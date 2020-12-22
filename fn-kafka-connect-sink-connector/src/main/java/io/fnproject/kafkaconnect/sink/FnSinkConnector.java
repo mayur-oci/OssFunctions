@@ -12,10 +12,13 @@ import java.util.*;
 public class FnSinkConnector extends SinkConnector {
     private Map<String, String> configProperties;
 
+    private OciFnProcessTracker ociFnProcessTracker = null;
+
     @Override
     public void start(Map<String, String> config) {
         this.configProperties = config;
-        new Thread(new StartOciFunctionProcessThread()).start();
+        OciFnProcessTracker ociFnProcessTracker = new OciFnProcessTracker();
+        new Thread(new OciFnProcessTracker()).start();
     }
 
 
@@ -40,6 +43,7 @@ public class FnSinkConnector extends SinkConnector {
 
     @Override
     public void stop() {
+        ociFnProcessTracker.stop();
         System.out.println("Connector stopped");
     }
 
@@ -54,7 +58,8 @@ public class FnSinkConnector extends SinkConnector {
         return "v1.0";
     }
 
-    class StartOciFunctionProcessThread implements Runnable{
+    class OciFnProcessTracker implements Runnable {
+        Process p = null;
 
         @Override
         public void run() {
@@ -79,24 +84,29 @@ public class FnSinkConnector extends SinkConnector {
                     env.remove("ociLocalConfig");
                 }
 
-                Process p = pb.start();
-                String outputFromProcess = "";
+                p = pb.start();
+                System.out.println("Started OciFnSDK");
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(p.getInputStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        outputFromProcess = outputFromProcess + line + "\n";
+                        System.out.println("\nOciFnSDK:: " + line);
+                        if (!p.isAlive()) break;
                     }
                 }
 
-                while (p.isAlive()) ;
                 System.out.println("process exit value is " + p.exitValue());
-                System.out.println("process exited with output:\n" + outputFromProcess);
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
+
+        void stop() {
+            p.destroy();
+        }
+
+
     }
 
 }
