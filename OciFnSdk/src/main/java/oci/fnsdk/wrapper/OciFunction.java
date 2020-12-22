@@ -19,10 +19,15 @@ import com.oracle.bmc.util.StreamUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.StringUtils;
 
+import org.zeromq.SocketType;
+import org.zeromq.ZMQ;
+import org.zeromq.ZContext;
+
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 
 public class OciFunction {
     static final String OCI_REGION_FOR_FUNCTION = "ociRegionForFunction";
@@ -47,15 +52,42 @@ public class OciFunction {
         }
 
         init();
-        boolean successOrFail = invokeFunction(config.get("review"));
-        if (successOrFail) {
-            System.out.println("Success from OciFnSDK, time taken in millis: " + (System.currentTimeMillis() - startTime));
-            System.exit(0);
-        }
 
-        System.out.println("Failure from OciFnSDK, time taken: " + (System.currentTimeMillis() - startTime));
-        System.exit(1);
+        zmqHandler();
+
+//        boolean successOrFail = invokeFunction(config.get("review"));
+//        if (successOrFail) {
+//            System.out.println("Success from OciFnSDK, time taken in millis: " + (System.currentTimeMillis() - startTime));
+//            System.exit(0);
+//        }
+//
+//        System.out.println("Failure from OciFnSDK, time taken: " + (System.currentTimeMillis() - startTime));
+//        System.exit(1);
     }
+
+    static void zmqHandler(){
+        try  {
+            //  Socket to talk to clients
+            ZContext context = new ZContext();
+            ZMQ.Socket socket = context.createSocket(SocketType.REP);
+            socket.bind("tcp://*:5555");
+
+            while (!Thread.currentThread().isInterrupted()) {
+                byte[] reply = socket.recv(0);
+                String review=new String(reply, ZMQ.CHARSET);
+                System.out.println(
+                        "Received " + ": [" + new String(reply, ZMQ.CHARSET) + "]"
+                );
+                String response = invokeFunction(review).toString();
+                socket.send(response.getBytes(ZMQ.CHARSET), 0);
+            }
+        }
+        catch (Exception e){
+            System.out.println(" Exception in zmqHandler "+e);
+        }
+    }
+
+
 
     static void init() {
         try {
@@ -143,7 +175,7 @@ public class OciFunction {
         return application;
     }
 
-    static boolean invokeFunction(String payload) {
+    static Boolean invokeFunction(String payload) {
         try {
             System.out.println("Invoking function endpoint - " + fn.getInvokeEndpoint());
 
@@ -177,7 +209,6 @@ public class OciFunction {
         fnManagementClient.close();
     }
 
-
     private static class IdentityOciProvider {
         // OCI Auth provider is needed for accessing Object Storage
         static BasicAuthenticationDetailsProvider provider = null;
@@ -207,6 +238,19 @@ public class OciFunction {
             }
 
             return;
+        }
+    }
+
+    class ReviewClassifierFn implements Callable<Boolean> {
+        String review;
+
+        ReviewClassifierFn(String review){
+            this.review=review;
+        }
+
+        @Override
+        public Boolean call() throws Exception {
+            return invokeFunction(this.review);
         }
     }
 }

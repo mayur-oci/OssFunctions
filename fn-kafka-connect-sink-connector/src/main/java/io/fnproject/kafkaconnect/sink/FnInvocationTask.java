@@ -4,22 +4,32 @@ import com.google.gson.Gson;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.zeromq.SocketType;
+import org.zeromq.ZContext;
+import org.zeromq.ZMQ;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.InputStreamReader;
 import java.util.Collection;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
 public class FnInvocationTask extends SinkTask {
     private Map<String, String> config;
 
+    ZContext zcontext = null;
+    ZMQ.Socket socket = null;
+
+
     @Override
     public void start(Map<String, String> config) {
         this.config = config;
         System.out.println("Task started with config... " + config);
+
+        try {
+            zcontext = new ZContext();
+            socket = zcontext.createSocket(SocketType.REQ);
+            socket.connect("tcp://localhost:5555");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     @Override
@@ -43,54 +53,25 @@ public class FnInvocationTask extends SinkTask {
                 System.out.println("Message with value:->  " + record.value());
                 Gson gson = new Gson();
                 String json = gson.toJson(record.value());
-                this.invokeFnProcess(json);
+                this.sendZmqMessage(json);
             }
         }
     }
 
 
-    private boolean invokeFnProcess(String review) {
+
+    private synchronized void sendZmqMessage(String review){
         try {
+            System.out.println("Sending review " + review);
+            socket.send(review.getBytes(ZMQ.CHARSET), 0);
 
-            String javaHome = System.getProperty("java.home");
-            String javaBin = javaHome +
-                    File.separator + "bin" +
-                    File.separator + "java";
+            byte[] reply = socket.recv(0);
+            System.out.println("Received " +
+                    new String(reply, ZMQ.CHARSET) + " for review " + review);
 
-            List<String> command = new LinkedList<String>();
-            command.add(javaBin);
-            command.add("-jar");
-            String jarPath = "/usr/OciFnSdk/FnUtility-1.0-SNAPSHOT-jar-with-dependencies.jar";
-            command.add(jarPath);
-
-            ProcessBuilder pb = new ProcessBuilder(command);
-            Map<String, String> env = pb.environment();
-            env.clear();
-            env.putAll(this.config);
-            if (this.config.get("ociLocalConfig") == null || this.config.get("ociLocalConfig").length() == 0) {
-                env.remove("ociLocalConfig");
-            }
-            env.put("review", review);
-
-            Process p = pb.start();
-            String outputFromProcess = "";
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(p.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    outputFromProcess = outputFromProcess + line + "\n";
-                }
-            }
-
-            while (p.isAlive()) ;
-            System.out.println("process exit value is " + p.exitValue());
-            System.out.println("process exited with output:\n" + outputFromProcess);
-
-        } catch (Exception e) {
-            e.printStackTrace();
+        }catch (Exception e){
+            System.out.println("Error in sendZmqMessage "+ e);
         }
-
-        return true;
     }
 
     @Override

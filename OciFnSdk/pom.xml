@@ -21,11 +21,16 @@
             <artifactId>oci-java-sdk-common</artifactId>
             <version>RELEASE</version>
         </dependency>
-
         <dependency>
             <groupId>com.oracle.oci.sdk</groupId>
             <artifactId>oci-java-sdk-functions</artifactId>
             <version>RELEASE</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.zeromq</groupId>
+            <artifactId>jeromq</artifactId>
+            <version>0.5.2</version>
         </dependency>
     </dependencies>
 
