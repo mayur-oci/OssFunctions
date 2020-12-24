@@ -78,12 +78,11 @@ public class FnSinkConnector extends SinkConnector {
                     new InputStreamReader(p.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    System.out.println("OciFnSDK:: " + line);
+                    System.out.println("OciFnSdk o/p :: " + line);
                     if (!p.isAlive()) break;
                 }
             }
-
-            System.out.println("process exit value is " + p.exitValue());
+            System.out.println("OciFnSdk process exit value is " + p.exitValue());
         }
 
         private void launchProcess() throws IOException {

@@ -26,7 +26,6 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Callable;
 
 public class OciFunction {
     static final String OCI_REGION_FOR_FUNCTION = "ociRegionForFunction";
@@ -61,8 +60,8 @@ public class OciFunction {
                 byte[] reply = socket.recv(0);
                 long startTime = System.currentTimeMillis();
                 String review = new String(reply, ZMQ.CHARSET);
-                System.out.println("Received " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
-                String response = invokeFunction(review).toString();
+                System.out.println("Received for processing " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
+                String response = invokeFunction(review);
                 if ("true".equals(response)) {
                     System.out.println("Success from function call, time taken in millis: " + (System.currentTimeMillis() - startTime));
                 }else{
@@ -88,7 +87,7 @@ public class OciFunction {
             fn = getUniqueFunctionByName(fnManagementClient, config.get(OCI_COMPARTMENT_ID_FOR_FUNCTION),
                     config.get(FUNCTION_APP_NAME), config.get(FUNCTION_NAME));
             fnInvokeClient.setEndpoint(fn.getInvokeEndpoint());
-            System.out.println("OciFunction initialize success.");
+            System.out.println("OciFunction initialize success, function invoke endpoint:"+fn.getInvokeEndpoint());
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("OciFunction initialize failed : " + e);
@@ -162,10 +161,8 @@ public class OciFunction {
         return application;
     }
 
-    static Boolean invokeFunction(String payload) {
+    static String invokeFunction(String payload) {
         try {
-            System.out.println("Invoking function endpoint - " + fn.getInvokeEndpoint());
-
             // Configure the client to use the assigned function endpoint.
             final InvokeFunctionRequest invokeFunctionRequest =
                     InvokeFunctionRequest.builder()
@@ -180,14 +177,12 @@ public class OciFunction {
 
             // Handle the response.
             String response = IOUtils.toString(invokeFunctionResponse.getInputStream(), StandardCharsets.UTF_8);
-            if (response != null) {
-                System.out.println("Response from function:  " + response);
-            }
-            return true;
+
+            return response;
         } catch (final Exception e) {
             e.printStackTrace();
             System.out.println("Failed to invoke function: " + e);
-            return false;
+            return "false";
         }
     }
 
@@ -209,36 +204,24 @@ public class OciFunction {
                     if (file.exists()) {
                         final ConfigFileReader.ConfigFile configFile = ConfigFileReader.parse(file.getAbsolutePath(), "DEFAULT");
                         provider = new ConfigFileAuthenticationDetailsProvider(configFile);
-                        System.out.println(" Oci Config provider created: " + provider);
+                        System.out.println("Oci Config provider created: " + provider);
                         return;
                     }
                 }
             } catch (Exception e) {
-                System.out.println(" Oci Config provider failed, will try instance provider ");
+                System.out.println("Oci Config provider failed, will try instance provider ");
             }
 
             try {
                 provider = InstancePrincipalsAuthenticationDetailsProvider.builder().build();
-                System.out.println(" Oci Instance provider success ");
+                System.out.println("Oci Instance provider success ");
             } catch (Exception e) {
-                System.out.println(" Oci Instance provider failed ");
+                System.out.println("Oci Instance provider failed ");
             }
 
             return;
         }
     }
 
-    class ReviewClassifierFn implements Callable<Boolean> {
-        String review;
-
-        ReviewClassifierFn(String review) {
-            this.review = review;
-        }
-
-        @Override
-        public Boolean call() throws Exception {
-            return invokeFunction(this.review);
-        }
-    }
 }
 
