@@ -6,6 +6,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 
@@ -64,38 +65,41 @@ public class FnSinkConnector extends SinkConnector {
         @Override
         public void run() {
             try {
-
-                String javaHome = System.getProperty("java.home");
-                String javaBin = javaHome +
-                        File.separator + "bin" +
-                        File.separator + "java";
-
-                List<String> command = new LinkedList<String>();
-                command.add(javaBin);
-                command.add("-jar");
-                String jarPath = "/usr/fnprocess/fnprocess-1.0-SNAPSHOT-jar-with-dependencies.jar";
-                command.add(jarPath);
-
-                ProcessBuilder pb = new ProcessBuilder(command);
-                Map<String, String> env = pb.environment();
-                putFunctionInfoInEnv(env);
-
-                p = pb.start();
-                System.out.println("Started OciFnSDK");
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(p.getInputStream()))) {
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        System.out.println("OciFnSDK:: " + line);
-                        if (!p.isAlive()) break;
-                    }
-                }
-
-                System.out.println("process exit value is " + p.exitValue());
-
+                launchProcess();
+                trackOutput();
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+
+        private void trackOutput() throws IOException {
+            System.out.println("Started OciFnSDK");
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    System.out.println("OciFnSDK:: " + line);
+                    if (!p.isAlive()) break;
+                }
+            }
+
+            System.out.println("process exit value is " + p.exitValue());
+        }
+
+        private void launchProcess() throws IOException {
+            String javaHome = System.getProperty("java.home");
+            String javaBin = javaHome +  File.separator + "bin" + File.separator + "java";
+
+            List<String> command = new LinkedList<String>();
+            command.add(javaBin); command.add("-jar");
+            String jarPath = "/usr/fnprocess/fnprocess-1.0-SNAPSHOT-jar-with-dependencies.jar";
+            command.add(jarPath);
+
+            ProcessBuilder pb = new ProcessBuilder(command);
+            Map<String, String> env = pb.environment();
+            putFunctionInfoInEnv(env);
+
+            p = pb.start();
         }
 
         private void putFunctionInfoInEnv(Map<String, String> env) {
