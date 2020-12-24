@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
 
-public class OciFunction {
+public class OciFnManager {
     static final String OCI_REGION_FOR_FUNCTION = "ociRegionForFunction";
     static final String OCI_COMPARTMENT_ID_FOR_FUNCTION = "ociCompartmentIdForFunction";
     static final String FUNCTION_APP_NAME = "functionAppName";

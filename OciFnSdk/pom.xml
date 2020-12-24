@@ -45,7 +45,7 @@
                     </descriptorRefs>
                     <archive>
                         <manifest>
-                            <mainClass>oci.fnsdk.wrapper.OciFunction</mainClass>
+                            <mainClass>oci.fnsdk.wrapper.OciFnManager</mainClass>
                         </manifest>
                     </archive>
                 </configuration>
