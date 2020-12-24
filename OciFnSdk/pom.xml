@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>oci.fnsdk.wrapper</groupId>
-    <artifactId>FnUtility</artifactId>
+    <artifactId>fnprocess</artifactId>
     <version>1.0-SNAPSHOT</version>
 
     <properties>

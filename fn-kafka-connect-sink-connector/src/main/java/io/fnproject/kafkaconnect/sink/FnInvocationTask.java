@@ -10,11 +10,13 @@ import org.zeromq.ZMQ;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class FnInvocationTask extends SinkTask {
     ZContext zcontext = null;
     ZMQ.Socket socket = null;
     private Map<String, String> config;
+    static AtomicInteger processedReviews = new AtomicInteger(0);
 
     @Override
     public void start(Map<String, String> config) {
@@ -44,14 +46,16 @@ public class FnInvocationTask extends SinkTask {
         for (SinkRecord record : records) {
             System.out.println("Got record from offset " + record.kafkaOffset()
                     + " in partition " + record.kafkaPartition() + " of topic " + record.topic());
-            if (record.key() != null)
-                System.out.println("Key type is :" + record.key().getClass().getCanonicalName());
+            //if (record.key() != null)
+                //System.out.println("Key type is :" + record.key().getClass().getCanonicalName());
             if (record.value() != null) {
-                System.out.println("Value type is :" + record.value().getClass().getCanonicalName());
-                System.out.println("Message with value:->  " + record.value());
+                //System.out.println("Value type is :" + record.value().getClass().getCanonicalName());
+                //System.out.println("Message with value:->  " + record.value());
                 Gson gson = new Gson();
                 String json = gson.toJson(record.value());
                 this.sendZmqMessage(json);
+                processedReviews.incrementAndGet();
+                System.out.println("Count of reviews processed so far:"+processedReviews);
             }
         }
     }
@@ -59,13 +63,10 @@ public class FnInvocationTask extends SinkTask {
 
     private synchronized void sendZmqMessage(String review) {
         try {
-            System.out.println("Sending review " + review);
+            //System.out.println("Sending review " + review);
             socket.send(review.getBytes(ZMQ.CHARSET), 0);
-
             byte[] reply = socket.recv(0);
-            System.out.println("Received -> " +
-                    new String(reply, ZMQ.CHARSET) + " for review -> " + review);
-
+            System.out.println("Received -> " + new String(reply, ZMQ.CHARSET) + " for review -> " + review);
         } catch (Exception e) {
             System.out.println("Error in sendZmqMessage " + e);
         }
@@ -73,7 +74,7 @@ public class FnInvocationTask extends SinkTask {
 
     @Override
     public void stop() {
-        System.out.println("FnSink Task stopped... ");
+        System.out.println("FnSink Task stopped... total count for reviews processed is "+ processedReviews);
     }
 
     @Override

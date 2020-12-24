@@ -73,16 +73,12 @@ public class FnSinkConnector extends SinkConnector {
                 List<String> command = new LinkedList<String>();
                 command.add(javaBin);
                 command.add("-jar");
-                String jarPath = "/usr/OciFnSdk/FnUtility-1.0-SNAPSHOT-jar-with-dependencies.jar";
+                String jarPath = "/usr/fnprocess/fnprocess-1.0-SNAPSHOT-jar-with-dependencies.jar";
                 command.add(jarPath);
 
                 ProcessBuilder pb = new ProcessBuilder(command);
                 Map<String, String> env = pb.environment();
-                env.clear();
-                env.putAll(configProperties);
-                if (configProperties.get("ociLocalConfig") == null || configProperties.get("ociLocalConfig").length() == 0) {
-                    env.remove("ociLocalConfig");
-                }
+                putFunctionInfoInEnv(env);
 
                 p = pb.start();
                 System.out.println("Started OciFnSDK");
@@ -90,7 +86,7 @@ public class FnSinkConnector extends SinkConnector {
                         new InputStreamReader(p.getInputStream()))) {
                     String line;
                     while ((line = reader.readLine()) != null) {
-                        System.out.println("\nOciFnSDK:: " + line);
+                        System.out.println("OciFnSDK:: " + line);
                         if (!p.isAlive()) break;
                     }
                 }
@@ -102,10 +98,21 @@ public class FnSinkConnector extends SinkConnector {
             }
         }
 
+        private void putFunctionInfoInEnv(Map<String, String> env) {
+            env.clear();
+            env.put(FnInvocationConfig.OCI_REGION_FOR_FUNCTION, configProperties.get(FnInvocationConfig.OCI_REGION_FOR_FUNCTION));
+            env.put(FnInvocationConfig.OCI_COMPARTMENT_ID_FOR_FUNCTION, configProperties.get(FnInvocationConfig.OCI_COMPARTMENT_ID_FOR_FUNCTION));
+            env.put(FnInvocationConfig.FUNCTION_APP_NAME, configProperties.get(FnInvocationConfig.FUNCTION_APP_NAME));
+            env.put(FnInvocationConfig.FUNCTION_NAME, configProperties.get(FnInvocationConfig.FUNCTION_NAME));
+            if (!(configProperties.get(FnInvocationConfig.OCI_LOCAL_CONFIG) == null) &&
+                    !(configProperties.get(FnInvocationConfig.OCI_LOCAL_CONFIG).length() == 0)) {
+                env.put(FnInvocationConfig.OCI_LOCAL_CONFIG, configProperties.get(FnInvocationConfig.OCI_LOCAL_CONFIG));
+            }
+        }
+
         void stop() {
             p.destroy();
         }
-
 
     }
 

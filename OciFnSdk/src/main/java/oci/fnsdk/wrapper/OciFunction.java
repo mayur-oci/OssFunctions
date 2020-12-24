@@ -42,18 +42,12 @@ public class OciFunction {
 
 
     public static void main(String args[]) {
-        long startTime = System.currentTimeMillis();
         config = System.getenv();
-
         Set<Map.Entry<String, String>> entrySet = config.entrySet();
-        for (Map.Entry<String, String> entry : entrySet) {
-            System.out.println("Key - " + entry.getKey() + ", Value - " + entry.getValue());
-        }
-
+        for (Map.Entry<String, String> entry : entrySet)
+          { System.out.println("Key - " + entry.getKey() + ", Value - " + entry.getValue()); }
         init();
-
         zmqHandler();
-
     }
 
     static void zmqHandler() {
@@ -65,9 +59,15 @@ public class OciFunction {
 
             while (!Thread.currentThread().isInterrupted()) {
                 byte[] reply = socket.recv(0);
+                long startTime = System.currentTimeMillis();
                 String review = new String(reply, ZMQ.CHARSET);
                 System.out.println("Received " + ": [" + new String(reply, ZMQ.CHARSET) + "]");
                 String response = invokeFunction(review).toString();
+                if ("true".equals(response)) {
+                    System.out.println("Success from function call, time taken in millis: " + (System.currentTimeMillis() - startTime));
+                }else{
+                    System.out.println("Failure from function call, time taken in millis: " + (System.currentTimeMillis() - startTime));
+                }
                 socket.send(response.getBytes(ZMQ.CHARSET), 0);
             }
         } catch (Exception e) {
