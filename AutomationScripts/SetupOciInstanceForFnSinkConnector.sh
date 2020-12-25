@@ -87,7 +87,7 @@
       ${MOUNT_OCI_CONFIGS_IF_APPLICABLE} \
       kafka-connect-fn-sink:latest  > /tmp/kafka.log&
 
-    tail -f /tmp/kafka.log
+    #tail -f /tmp/kafka.log
 
     curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
     echo "Connector $FN_CONNECTOR_NAME deleted"
@@ -108,5 +108,6 @@
         \"ociLocalConfig\": \"${HOME}\"
       }
     }"
+
 
 
