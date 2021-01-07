@@ -9,22 +9,17 @@
     systemctl stop firewalld
     systemctl disable firewalld
 
-# Upgrade yum package manager
-    yum upgrade -y -q
-
 # Install git for fetching the code
-    yum install -y git
+    dnf install -y git
 
 # Install Java
-    yum install -y yum java-1.8.0-openjdk-devel
+    dnf install -y java-1.8.0-openjdk-devel.x86_64
 
 # Install docker
-    yum install -y yum-utils zip unzip
-    yum-config-manager --enable ol7_optional_latest
-    yum-config-manager --enable ol7_addons
-    yum install -y oraclelinux-developer-release-el7
-    yum-config-manager --enable ol7_developer
-    yum install -y docker-engine btrfs-progs btrfs-progs-devel
+    dnf install -y dnf-utils zip unzip
+    dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+    dnf install -y docker-ce --nobest
+
     systemctl enable docker.service
     systemctl start docker.service
     #You can get information about docker using the following commands.
@@ -47,7 +42,7 @@
     fi
 
     rm -rf OssFunctions
-    git clone https://github.com/mayur-oci/OssFunctions
+    git clone -b zmqOop https://github.com/mayur-oci/OssFunctions
 
     cd OssFunctions
     ./mvnw install -f ./'fn-kafka-connect-sink-connector'/pom.xml
@@ -88,6 +83,8 @@
       kafka-connect-fn-sink:latest  > /tmp/kafka.log&
 
     #tail -f /tmp/kafka.log
+
+    sleep 30
 
     curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
     echo "Connector $FN_CONNECTOR_NAME deleted"

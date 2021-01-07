@@ -8,7 +8,6 @@
 
           OCI_HOME_REGION=us-ashburn-1
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
-          OCI_CURRENT_REGION_CODE=phx
           OCI_CLI_PROFILE=DEFAULT
 
 #Common utility functions          
@@ -25,7 +24,9 @@
                          --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --wait-for-state ACTIVE --query "data.id" --raw-output)
           out "OCI_CMPT_NAME=${OCI_CMPT_NAME}" 
           out "OCI_CMPT_ID=${OCI_CMPT_ID}"
-
+          sleep 80
+          echo "OCI_CMPT_ID is $OCI_CMPT_ID"
+             
 #Create OCI streampool and stream(aka Kafka Topic) in it
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
           OCI_STREAM_NAME=REVIEWS_STREAM
@@ -36,6 +37,8 @@
           out "OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID}"
           out "OCI_STREAM_ID=${OCI_STREAM_ID}"
           out "OCI_CONNECT_HARNESS_ID=${OCI_CONNECT_HARNESS_ID}"
+
+
 
 #Create buckets for processed reviews
           GOOD_REVIEWS_BUCKET_NAME=goodRevBucket_${JobRunId}
@@ -193,7 +196,7 @@
 
           out "OCI_FN_USER_ID=${OCI_FN_USER_ID}"
           out "OCI_FN_USERGROUP_ID=${OCI_FN_USERGROUP_ID}"
-          out "OCI_FN_USER_AUTH_TOKEN=${OCI_FN_USER_AUTH_TOKEN}"
+          out "OCI_FN_USER_AUTH_TOKEN=\"${OCI_FN_USER_AUTH_TOKEN}\""
           sleep 30
           OCI_FN_USER_AUTH_TOKEN_OCID=$(oci iam auth-token  list --user-id ${OCI_FN_USER_ID}  --query 'data[0].id' --raw-output)
           out "OCI_FN_USER_AUTH_TOKEN_OCID=${OCI_FN_USER_AUTH_TOKEN_OCID}"
@@ -202,7 +205,8 @@
 #Create Function App(a logical container for functions). Inside this app, we will create producer and consumer function
 #Consumer function will be triggered by Kafka FnSink connector
           #Fn Context setup
-            FN_CONTEXT=fn_oss_cntx_111
+            OCI_CURRENT_REGION_CODE=phx
+            FN_CONTEXT=fn_oss_cntx_$OCI_CMPT_NAME
             fn delete context $FN_CONTEXT # just to make script idempotent
             fn create context $FN_CONTEXT --provider oracle 
             fn use context $FN_CONTEXT
@@ -220,6 +224,7 @@
             fn list apps 
 
           #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
+            echo docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p "$OCI_FN_USER_AUTH_TOKEN" $OCI_DOCKER_REGISTRY_URL
             docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
@@ -253,7 +258,7 @@
             FN_REPO_NAME=OssFunctions
             rm -rf OssFunctions
             FN_GITHUB_URL="https://github.com/mayur-oci/${FN_REPO_NAME}.git"
-            git clone $FN_GITHUB_URL
+            git clone -b zmqOop $FN_GITHUB_URL
             
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn            
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
@@ -269,7 +274,10 @@
         AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
         echo availability-domain chosen for compute instance: $AD
         #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
+
         ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaxdnx3den32vwplngpeu44zakw7lxup7vcdd3jmke4pfleaug3m6q'
+        ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaachy5qla6fy7pmkxf44r7ixoz6qybnkv7zsd3psxahihvbc54ahea'
+
         COMPUTE_OCID=$(oci compute instance launch \
                                 -c ${OCI_CMPT_ID} \
                                 --shape "${COMPUTE_SHAPE}" \
@@ -300,9 +308,12 @@
         rm statements.json  
 
         out "COMPUTE_OCID=${COMPUTE_OCID}"
+        out "COMPUTE_PUBLIC_IP=\"${COMPUTE_PUBLIC_IP}\""
         out "DG_CI_ID=${DG_CI_ID}" 
-        out "DG_CI_POLICY_ID=${DG_CI_POLICY_ID}"                     
+        out "DG_CI_POLICY_ID=${DG_CI_POLICY_ID}"    
+        out "SSH_PRIVATE_KEY_LOCATION=\"${SSH_PRIVATE_KEY_LOCATION}\""                 
 
+        sleep 60
         # transfer env values for docker
         echo OCI_TENANCY_NAME=${OCI_TENANCY_NAME} > env.json
         echo OCI_CURRENT_REGION=${OCI_CURRENT_REGION} >> env.json

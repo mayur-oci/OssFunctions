@@ -11,7 +11,19 @@
           OCI_CURRENT_REGION_CODE=phx
           OCI_CLI_PROFILE=DEFAULT
 
-#Common utility functions          
+#Common utility functions        
+          oci -v
+
+#Basic tenancy and user information. User needs admin privileges.
+          OCI_TENANCY_NAME=intrandallbarnes
+          OCI_TENANCY_OCID=ocid1.tenancy.oc1..aaaaaaaaopbu45aomik7sswe4nzzll3f6ii6pipd5ttw4ayoozez37qqmh3a
+
+          OCI_HOME_REGION=us-ashburn-1
+          OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
+          OCI_CURRENT_REGION_CODE=phx
+          OCI_CLI_PROFILE=DEFAULT
+
+
           JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M")          
           ocidList=resourceIdList_For_JobRun_${JobRunId}.sh
           out(){
@@ -22,7 +34,7 @@
 #Create new compartment for this demo...We will create all resources for this demo inside this compartment.
           OCI_CMPT_NAME=FnOss_${JobRunId}
           OCI_CMPT_ID=$(oci iam compartment create --name ${OCI_CMPT_NAME} --compartment-id ${OCI_TENANCY_OCID} \
-                         --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --wait-for-state ACTIVE --query "data.id" --raw-output)
+                         --description "A compartment to fn oss integration" --wait-for-state ACTIVE --query "data.id" --raw-output)
           out "OCI_CMPT_NAME=${OCI_CMPT_NAME}" 
           out "OCI_CMPT_ID=${OCI_CMPT_ID}"
           sleep 60
@@ -37,6 +49,7 @@
           out "OCI_STREAM_ID=${OCI_STREAM_ID}"
           out "OCI_CONNECT_HARNESS_ID=${OCI_CONNECT_HARNESS_ID}"
 
+          exit
 
 #Create buckets for processed reviews
           GOOD_REVIEWS_BUCKET_NAME=goodRevBucket_${JobRunId}
