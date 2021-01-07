@@ -333,7 +333,7 @@
 
         # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector       
         cat env.json > kafkaConnector.sh 
-        curl -O "https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
+        curl -O "https://raw.githubusercontent.com/mayur-oci/OssFunctions/zmqOop/AutomationScripts/SetupOciInstanceForFnSinkConnector.sh"
         cat SetupOciInstanceForFnSinkConnector.sh >> kafkaConnector.sh ; chmod 777 kafkaConnector.sh
         scp -i ${SSH_PRIVATE_KEY_LOCATION} -o ServerAliveInterval=60 -o "StrictHostKeyChecking no" ./kafkaConnector.sh opc@$COMPUTE_PUBLIC_IP:~/
 
@@ -351,13 +351,9 @@
 
 
 #Invoke Producer Function
-        echo -n '{"reviewId": "REV_100", "time": 200010000000000, \
-        "productId": "PRODUCT_100", "reviewContent": "review content"}' \
-        | fn -v invoke $FN_APP_NAME review_producer_fn 
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | fn -v invoke $FN_APP_NAME review_producer_fn 
 
-        echo -n '{"reviewId": "REV_200", "time": 200010000000100, \
-        "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' \
-        | fn invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_200", "time": 200010000000100, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' | fn invoke $FN_APP_NAME review_producer_fn
 
 #Checking if objects are created in the buckets
        oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME}

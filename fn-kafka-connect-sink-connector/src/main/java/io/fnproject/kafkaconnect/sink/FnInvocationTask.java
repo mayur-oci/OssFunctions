@@ -46,11 +46,11 @@ public class FnInvocationTask extends SinkTask {
         for (SinkRecord record : records) {
             System.out.println("Got record from offset " + record.kafkaOffset()
                     + " in partition " + record.kafkaPartition() + " of topic " + record.topic());
-            //if (record.key() != null)
-                //System.out.println("Key type is :" + record.key().getClass().getCanonicalName());
+            if (record.key() != null)
+                System.out.println("Key type is :" + record.key().getClass().getCanonicalName());
             if (record.value() != null) {
-                //System.out.println("Value type is :" + record.value().getClass().getCanonicalName());
-                //System.out.println("Message with value:->  " + record.value());
+                System.out.println("Value type is :" + record.value().getClass().getCanonicalName());
+                System.out.println("Message with value:->  " + record.value());
                 Gson gson = new Gson();
                 String json = gson.toJson(record.value());
                 this.sendZmqMessage(json);
