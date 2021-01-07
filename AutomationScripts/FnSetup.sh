@@ -9,6 +9,7 @@
           OCI_HOME_REGION=us-ashburn-1
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
           OCI_CLI_PROFILE=DEFAULT
+          OCI_CURRENT_REGION_CODE=phx
 
 #Common utility functions          
           JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M")          
@@ -24,8 +25,10 @@
                          --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --wait-for-state ACTIVE --query "data.id" --raw-output)
           out "OCI_CMPT_NAME=${OCI_CMPT_NAME}" 
           out "OCI_CMPT_ID=${OCI_CMPT_ID}"
+          
+          echo Sleeping for some seconds, we need sleep since sometimes '--wait-for-state ACTIVE' for create compartment command does not work as expected.
           sleep 80
-          echo "OCI_CMPT_ID is $OCI_CMPT_ID"
+          
              
 #Create OCI streampool and stream(aka Kafka Topic) in it
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
@@ -205,7 +208,6 @@
 #Create Function App(a logical container for functions). Inside this app, we will create producer and consumer function
 #Consumer function will be triggered by Kafka FnSink connector
           #Fn Context setup
-            OCI_CURRENT_REGION_CODE=phx
             FN_CONTEXT=fn_oss_cntx_$OCI_CMPT_NAME
             fn delete context $FN_CONTEXT # just to make script idempotent
             fn create context $FN_CONTEXT --provider oracle 
@@ -273,9 +275,9 @@
         COMPUTE_SHAPE='VM.Standard2.1'
         AD=$(oci iam availability-domain list --region ${OCI_CURRENT_REGION} --query "(data[?ends_with(name, '-3')] | [0].name) || data[0].name" --raw-output)
         echo availability-domain chosen for compute instance: $AD
-        #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
 
-        ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaaxdnx3den32vwplngpeu44zakw7lxup7vcdd3jmke4pfleaug3m6q'
+        #Image ocid depends on region. Get image ocid from https://docs.cloud.oracle.com/en-us/iaas/images/image/96068886-76e5-4a48-af0a-fa7ed8466a25/
+        #We are using Oracle Linux 8 from OCI phx region
         ORALCE_LINUX_IMAGE_OCID='ocid1.image.oc1.phx.aaaaaaaachy5qla6fy7pmkxf44r7ixoz6qybnkv7zsd3psxahihvbc54ahea'
 
         COMPUTE_OCID=$(oci compute instance launch \
@@ -329,7 +331,7 @@
 
         echo FN_APP_NAME=${FN_APP_NAME} >> env.json
         echo FN_CONSUMER_FUNCTION_NAME=review_consumer_fn >> env.json
-        echo FN_CONNECTOR_NAME="FnSinkConnector_2" >> env.json
+        echo FN_CONNECTOR_NAME="FnSinkConnector" >> env.json
 
         # SSH into the node, set it up JDK 8, maven, docker, configure firewall and start the Fn Sink Connector       
         cat env.json > kafkaConnector.sh 
@@ -342,27 +344,30 @@
                       -o "StrictHostKeyChecking no" \
                       "sudo sh ~/kafkaConnector.sh"  
 
-        ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
-                      -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
-                      -o "StrictHostKeyChecking no" \
-                      'tail -f /home/opc/kafka.log' &
+        # If you want to see Fn Kafka Sink connector in action, you tail its logs as follows
+        # ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
+        #               -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
+        #               -o "StrictHostKeyChecking no" \
+        #               'tail -f /tmp/kafka.log' &
               
-        # rm env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh
+        rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
+        
 
+       sleep 20
 
 #Invoke Producer Function
-        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | fn -v invoke $FN_APP_NAME review_producer_fn 
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn 
 
-        echo -n '{"reviewId": "REV_200", "time": 200010000000100, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' | fn invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_500", "time": 300010000000100, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn
 
 #Checking if objects are created in the buckets
+       sleep 20
        oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME}
        oci os object list -bn ${BAD_REVIEW_BUCKET_NAME}
 
+       exit
 
-sleep 3000
-
-#Delete all resources in cmpt
+#Delete all resources in cmpt. Not yet tested
     #delete compute
     oci iam policy delete --policy-id ${DG_CI_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
