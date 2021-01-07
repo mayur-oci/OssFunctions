@@ -45,7 +45,7 @@ public class FnSinkConnector extends SinkConnector {
     @Override
     public void stop() {
         ociFnProcessTracker.stop();
-        System.out.println("Connector stopped");
+        System.out.println("FnSink Kafka Connector stopped");
     }
 
     @Override
