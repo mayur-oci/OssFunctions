@@ -226,8 +226,8 @@
             fn list apps 
 
           #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
-            echo docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p "$OCI_FN_USER_AUTH_TOKEN" $OCI_DOCKER_REGISTRY_URL
-            docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p $OCI_FN_USER_AUTH_TOKEN $OCI_DOCKER_REGISTRY_URL
+            echo docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p \"$OCI_FN_USER_AUTH_TOKEN\" $OCI_DOCKER_REGISTRY_URL
+            docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p \"$OCI_FN_USER_AUTH_TOKEN\" $OCI_DOCKER_REGISTRY_URL
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
             FN_APP_NAME=fn_oss_app_test
@@ -351,19 +351,21 @@
         #               'tail -f /tmp/kafka.log' &
               
         rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
+        sleep 20 
+
+#Invoke Consumer Function
+        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_consumer_fn 
+        sleep 3
         
-
-       sleep 20
-
 #Invoke Producer Function
-        echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn 
+        echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn 
 
-        echo -n '{"reviewId": "REV_500", "time": 300010000000100, "productId": "PRODUCT_200", "reviewContent": "review content bad2"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn
+        echo -n '{"reviewId": "REV_300", "time": 300010000000100, "productId": "PRODUCT_300", "reviewContent": "review content bad2"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn
 
 #Checking if objects are created in the buckets
        sleep 20
        oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME}
-       oci os object list -bn ${BAD_REVIEW_BUCKET_NAME}
+       oci os object list -bn ${BAD_REVIEWS_BUCKET_NAME}
 
        exit
 
