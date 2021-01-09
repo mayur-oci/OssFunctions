@@ -106,4 +106,3 @@
 
    curl localhost:8082/connectors/${FN_CONNECTOR_NAME}/status | jq
 
-

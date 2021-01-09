@@ -356,7 +356,7 @@
 #Invoke Consumer Function
         echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_consumer_fn 
         sleep 3
-        
+
 #Invoke Producer Function
         echo -n '{"reviewId": "REV_200", "time": 200010000000000, "productId": "PRODUCT_200", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_producer_fn 
 
@@ -370,6 +370,37 @@
        exit
 
 #Delete all resources in cmpt. Not yet tested
+    OCID_CMPT_STACK=$(oci resource-manager stack create-from-compartment  --compartment-id ${OCI_TENANCY_OCID} --config-source-compartment-id ${OCI_CMPT_ID} \
+    --config-source-region PHX --terraform-version "0.13.x"\
+    --display-name "Stack_${OCI_CMPT_NAME}" --description 'Stack From Compartment ${OCI_CMPT_NAME}' --wait-for-state SUCCEEDED --query "data.resources[0].identifier" --raw-output)
+    echo $OCID_CMPT_STACK
+
+    oci resource-manager job create-destroy-job  --execution-plan-strategy 'AUTO_APPROVED'  --stack-id ${OCID_CMPT_STACK} --wait-for-state SUCCEEDED
+    oci resource-manager job create-destroy-job  --execution-plan-strategy 'AUTO_APPROVED'  --stack-id ${OCID_CMPT_STACK} --wait-for-state SUCCEEDED
+    oci resource-manager stack delete --stack-id ${OCID_CMPT_STACK} --force --wait-for-state DELETED
+
+
+    oci iam policy delete --policy-id ${OCI_FN_DG_AND_FAAS_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
+
+    #delete IAM resources which are out of compartment hierachy like policies, dynamic groups, user and user-group explicitly since they are not deleted with Terraform stack
+    oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN_OCID} --user-id ${OCI_FN_USER_ID} --force
+
+    oci iam group remove-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} --raw-output --query "data.id"
+    oci iam user delete --user-id ${OCI_FN_USER_ID} --force --wait-for-state INACTIVE
+    oci iam group delete --group-id ${OCI_FN_USERGROUP_ID} --force --wait-for-state INACTIVE
+
+    oci iam compartment delete -c ${OCI_CMPT_ID} --force --wait-for-state SUCCEEDED
+
+########################
+    mkdir tf_${OCI_CMPT_NAME}
+    export TF_VAR_region=${OCI_CURRENT_REGION}
+    terraform-provider-oci -command=export -compartment_id=${OCI_CMPT_ID} -output_path=./tf_${OCI_CMPT_NAME}/
+    cd tf_${OCI_CMPT_NAME}
+    terraform init 
+    terraform destroy
+
     #delete compute
     oci iam policy delete --policy-id ${DG_CI_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
