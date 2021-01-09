@@ -13,7 +13,7 @@
     dnf install -y git
 
 # Install Java
-    dnf install -y java-1.8.0-openjdk-devel.x86_64
+    dnf install -y java-11-openjdk-devel
 
 # Install docker
     dnf install -y dnf-utils zip unzip
