@@ -25,7 +25,8 @@
                          --description "A compartment to fn oss integration" --region ${OCI_HOME_REGION} --wait-for-state ACTIVE --query "data.id" --raw-output)
           out "OCI_CMPT_NAME=${OCI_CMPT_NAME}" 
           out "OCI_CMPT_ID=${OCI_CMPT_ID}"
-          
+          out "OCI_TENANCY_OCID=${OCI_TENANCY_OCID}"
+
           echo Sleeping for some seconds, we need sleep since sometimes '--wait-for-state ACTIVE' for create compartment command does not work as expected.
           sleep 80
           
@@ -369,7 +370,7 @@
 
        exit
 
-#Delete all resources in cmpt. Not yet tested
+#Delete all resources in cmpt. 
     OCID_CMPT_STACK=$(oci resource-manager stack create-from-compartment  --compartment-id ${OCI_TENANCY_OCID} --config-source-compartment-id ${OCI_CMPT_ID} \
     --config-source-region PHX --terraform-version "0.13.x"\
     --display-name "Stack_${OCI_CMPT_NAME}" --description 'Stack From Compartment ${OCI_CMPT_NAME}' --wait-for-state SUCCEEDED --query "data.resources[0].identifier" --raw-output)
@@ -380,19 +381,24 @@
     oci resource-manager stack delete --stack-id ${OCID_CMPT_STACK} --force --wait-for-state DELETED
 
 
-    oci iam policy delete --policy-id ${OCI_FN_DG_AND_FAAS_POLICY_ID} --force --wait-for-state INACTIVE
-    oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
 
     #delete IAM resources which are out of compartment hierachy like policies, dynamic groups, user and user-group explicitly since they are not deleted with Terraform stack
-    oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
-    oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN_OCID} --user-id ${OCI_FN_USER_ID} --force
+    # oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN_OCID} --user-id ${OCI_FN_USER_ID} --force
 
-    oci iam group remove-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} --raw-output --query "data.id"
+    oci iam policy delete --policy-id ${OCI_FN_DG_AND_FAAS_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
+    oci iam policy delete --policy-id ${DG_CI_POLICY_ID} --force --wait-for-state INACTIVE
+
+    oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
+    oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
+
+    oci iam group remove-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} 
     oci iam user delete --user-id ${OCI_FN_USER_ID} --force --wait-for-state INACTIVE
     oci iam group delete --group-id ${OCI_FN_USERGROUP_ID} --force --wait-for-state INACTIVE
 
     oci iam compartment delete -c ${OCI_CMPT_ID} --force --wait-for-state SUCCEEDED
 
+    exit
 ########################
     mkdir tf_${OCI_CMPT_NAME}
     export TF_VAR_region=${OCI_CURRENT_REGION}
