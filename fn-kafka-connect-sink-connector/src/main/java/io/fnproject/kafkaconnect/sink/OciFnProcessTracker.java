@@ -40,9 +40,6 @@ class OciFnProcessTracker implements Runnable {
             trackOutput();
             Thread.sleep(100); // wait for OciFnProcess to start zmq server
 
-            zcontext = new ZContext();
-            socket = zcontext.createSocket(SocketType.REQ);
-            socket.connect("tcp://localhost:5555");
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -95,6 +92,11 @@ class OciFnProcessTracker implements Runnable {
 
     synchronized void sendZmqMessage(String review) {
         try {
+            if(socket == null){
+                zcontext = new ZContext();
+                socket = zcontext.createSocket(SocketType.REQ);
+                socket.connect("tcp://localhost:5555");
+            }
             //System.out.println("Sending review " + review);
             socket.send(review.getBytes(ZMQ.CHARSET), 0);
             byte[] reply = socket.recv(0);
