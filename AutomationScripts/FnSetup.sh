@@ -1,4 +1,4 @@
-#!/bin/bash
+# #!/bin/bash
 
 #Pre-reqs oci cli, fn cli needs to installed the machine
 
@@ -10,14 +10,18 @@
           OCI_CURRENT_REGION=us-phoenix-1 # from OCI config file
           OCI_CLI_PROFILE=DEFAULT
           OCI_CURRENT_REGION_CODE=phx
+        
 
 #Common utility functions          
-          JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M")          
+          JobRunId=$(date "+DATE_%Y_%m_%d_TIME_%H_%M")      
+          mkdir $JobRunId
+          cd $JobRunId    
           ocidList=resourceIdList_For_JobRun_${JobRunId}.sh
           out(){
             echo $1 | tee -a ${ocidList}
           }
           out "JobRunId=${JobRunId}"
+
 
 #Create new compartment for this demo...We will create all resources for this demo inside this compartment.
           OCI_CMPT_NAME=OssFn_${JobRunId}
@@ -35,9 +39,14 @@
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
           OCI_STREAM_NAME=REVIEWS_STREAM
           OCI_STREAM_PARTITIONS_COUNT=1
-          OCI_STREAM_POOL_ID=$(oci streaming admin stream-pool create -c ${OCI_CMPT_ID} --name ${OCI_STREAM_POOL_NAME} --wait-for-state ACTIVE --query "data.id" --raw-output)
-          OCI_STREAM_ID=$(oci streaming admin stream create --name ${OCI_STREAM_NAME} --partitions ${OCI_STREAM_PARTITIONS_COUNT} --stream-pool-id ${OCI_STREAM_POOL_ID} --wait-for-state ACTIVE --query "data.id" --raw-output)
-          OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
+          OCI_STREAM_POOL_ID=$(oci streaming admin stream-pool create -c ${OCI_CMPT_ID} --name ${OCI_STREAM_POOL_NAME} --region ${OCI_CURRENT_REGION} \
+                              --wait-for-state ACTIVE --query "data.id" --raw-output)
+          OCI_STREAM_ID=$(oci streaming admin stream create --name ${OCI_STREAM_NAME} --partitions ${OCI_STREAM_PARTITIONS_COUNT} \
+                         --region $OCI_CURRENT_REGION  --stream-pool-id ${OCI_STREAM_POOL_ID} --wait-for-state ACTIVE --query "data.id" --raw-output)
+          OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} \
+                          --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
+
+
           out "OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID}"
           out "OCI_STREAM_ID=${OCI_STREAM_ID}"
           out "OCI_CONNECT_HARNESS_ID=${OCI_CONNECT_HARNESS_ID}"
@@ -88,18 +97,19 @@
             until [ $n -ge 6 ]; do
               echo oci network vcn create --cidr-block ${OCI_FN_VCN_CIDR_BLOCK} --compartment-id ${OCI_CMPT_ID} --display-name ${OCI_FN_VCN_NAME}
               OCI_FN_VCN_ID=$(oci network vcn create --cidr-block ${OCI_FN_VCN_CIDR_BLOCK} --compartment-id ${OCI_CMPT_ID} \
-                             --display-name ${OCI_FN_VCN_NAME} --wait-for-state AVAILABLE --wait-interval-seconds 5 \
+                             --display-name ${OCI_FN_VCN_NAME} --region ${OCI_CURRENT_REGION} --wait-for-state AVAILABLE --wait-interval-seconds 5 \
                              --query "data.id" --raw-output) && break
               n=$(($n + 1))
               echo [create failed, trying again in 10 seconds...]
-              sleep 10
+              sleep 15
             done
 
             if [ $n -eq 6 ]; then
-              fail "Could not create VCN, exiting script!"
+              echo "Could not create VCN, exiting script!"
+              return
             else
-              OCI_FN_VCN_ROUTE_TABLE_ID=$(oci network vcn get --vcn-id ${OCI_FN_VCN_ID} --query 'data."default-route-table-id"' --raw-output)
-              OCI_FN_VCN_SECURITY_LIST_ID=$(oci network vcn get --vcn-id ${OCI_FN_VCN_ID} --query 'data."default-security-list-id"' --raw-output)
+              OCI_FN_VCN_ROUTE_TABLE_ID=$(oci network vcn get --vcn-id ${OCI_FN_VCN_ID} --region ${OCI_CURRENT_REGION} --query 'data."default-route-table-id"' --raw-output)
+              OCI_FN_VCN_SECURITY_LIST_ID=$(oci network vcn get --vcn-id ${OCI_FN_VCN_ID} --region ${OCI_CURRENT_REGION} --query 'data."default-security-list-id"' --raw-output)
               echo Created VCN ${OCI_FN_VCN_NAME} with ID ${OCI_FN_VCN_ID}
             fi
 
@@ -111,7 +121,7 @@
             OCI_FN_SUBNET_1_NAME=faas-subnet-1
             OCI_FN_SUBNET_2_NAME=faas-subnet-2
             OCI_FN_SUBNET_3_NAME=faas-subnet-3
-            VCN_PARAMS="--compartment-id ${OCI_CMPT_ID} --vcn-id ${OCI_FN_VCN_ID} --wait-for-state AVAILABLE "
+            VCN_PARAMS="--compartment-id ${OCI_CMPT_ID} --vcn-id ${OCI_FN_VCN_ID} --region ${OCI_CURRENT_REGION} --wait-for-state AVAILABLE "
             OCI_SUBNET_1=$(oci network subnet create --display-name ${OCI_FN_SUBNET_1_NAME} --cidr-block "${OCI_FN_VCN_SUBNET_1_CIDR_BLOCK}" ${VCN_PARAMS} | jq -r '.data.id')
             out "OCI_SUBNET_1=${OCI_SUBNET_1}"          
 
@@ -129,21 +139,21 @@
             # create internet gateway:
             OCI_FN_INTERNET_GATEWAY_NAME=faas-internet-gateway
             OCI_FN_INTERNET_GATEWAY_ID=$(oci network internet-gateway create --display-name ${OCI_FN_INTERNET_GATEWAY_NAME} \
-                                       --is-enabled true --compartment-id ${OCI_CMPT_ID} --vcn-id ${OCI_FN_VCN_ID} \
+                                       --is-enabled true --compartment-id ${OCI_CMPT_ID} --vcn-id ${OCI_FN_VCN_ID} --region ${OCI_CURRENT_REGION} \
                                        --wait-for-state AVAILABLE  --query 'data.id' --raw-output)
             out "OCI_FN_INTERNET_GATEWAY_ID=${OCI_FN_INTERNET_GATEWAY_ID}"
 
           # update default route table: (rule allows all internet traffic to hit the internet gateway we just created)
             ROUTE_RULES="[{\"cidrBlock\":\"0.0.0.0/0\",\"networkEntityId\":\""${OCI_FN_INTERNET_GATEWAY_ID}"\"}]"
             echo $ROUTE_RULES >route-rules.json
-            oci network route-table update --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --route-rules file://$(pwd)/route-rules.json --force
+            oci network route-table update --rt-id ${OCI_FN_VCN_ROUTE_TABLE_ID} --region ${OCI_CURRENT_REGION}  --route-rules file://$(pwd)/route-rules.json --force
             echo Updated default route table for VCN to allow traffic to internet gateway
             rm route-rules.json
 
           # update default security list
             curl -O https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/ingress.json
             curl -O https://raw.githubusercontent.com/mayur-oci/OssFunctions/master/AutomationScripts/egress.json
-            oci network security-list update --security-list-id ${OCI_FN_VCN_SECURITY_LIST_ID} \
+            oci network security-list update --security-list-id ${OCI_FN_VCN_SECURITY_LIST_ID} --region ${OCI_CURRENT_REGION} \
                                     --ingress-security-rules file://`pwd`/ingress.json  \
                                     --egress-security-rules file://`pwd`/egress.json --force
             echo Updated default security list for all subnets in VCN
@@ -206,11 +216,13 @@
           out "OCI_FN_USER_AUTH_TOKEN_OCID=${OCI_FN_USER_AUTH_TOKEN_OCID}"
           out "OCI_FN_USERGROUP_POLICY_ID=${OCI_FN_USERGROUP_POLICY_ID}"
 
+          
+
 #Create Function App(a logical container for functions). Inside this app, we will create producer and consumer function
 #Consumer function will be triggered by Kafka FnSink connector
           #Fn Context setup
             FN_CONTEXT=fn_oss_cntx_$OCI_CMPT_NAME
-            fn delete context $FN_CONTEXT # just to make script idempotent
+            fn delete context $FN_CONTEXT # just to make script idempotent, will throw error if given context does not exists
             fn create context $FN_CONTEXT --provider oracle 
             fn use context $FN_CONTEXT
             fn update context oracle.compartment-id $OCI_CMPT_ID
@@ -227,8 +239,27 @@
             fn list apps 
 
           #You need to login, to allow you to push the function docker image to registry, when you build and deploy the function code
-            echo docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p \"$OCI_FN_USER_AUTH_TOKEN\" $OCI_DOCKER_REGISTRY_URL
-            docker login -u $OCI_TENANCY_NAME/$OCI_FN_USERNAME -p \"$OCI_FN_USER_AUTH_TOKEN\" $OCI_DOCKER_REGISTRY_URL
+           docker logout $OCI_DOCKER_REGISTRY_URL
+           n=0
+           until [ $n -ge 10 ]; do
+              echo "$OCI_FN_USER_AUTH_TOKEN" | docker login -u "$OCI_TENANCY_NAME/$OCI_FN_USERNAME" --password-stdin $OCI_DOCKER_REGISTRY_URL
+              if [ $? -ne 0 ]; 
+              then
+                  {
+                    n=$(($n + 1))
+                    echo ["Failed docker login for OCI fn platform, trying again in 15 seconds, \
+                          many times it takes time for user auth tokens to sync in with oci docker registry..."]
+                    sleep 15
+                  }
+              else
+                 echo "Docker Login Success!!"
+                 break;
+              fi
+           done
+          if [ $n -eq 10 ]; then
+            echo "Could not login to oci docker registry after 10 attempts!!, returning from script"
+            return
+          fi
 
           #Create application for the function. This app is just logical container for both consumer and producer functions for our stream of product reviews
             FN_APP_NAME=fn_oss_app_test
@@ -248,7 +279,7 @@
             fn config app $FN_APP_NAME STREAM_POOL_OCID $OCI_STREAM_POOL_ID
             fn config app $FN_APP_NAME OCI_USERNAME $OCI_FN_USERNAME
             #TODO use OCI secrets instead of config for auth token
-            fn config app $FN_APP_NAME OCI_AUTH_TOKEN $OCI_FN_USER_AUTH_TOKEN 
+            fn config app $FN_APP_NAME OCI_AUTH_TOKEN \"$OCI_FN_USER_AUTH_TOKEN\" 
 
             #Configs for Kafka Consumer function
             fn config app $FN_APP_NAME OCI_OBJECT_STORAGE_NAMESPACE $OCI_TENANCY_NAME
@@ -263,11 +294,16 @@
             FN_GITHUB_URL="https://github.com/mayur-oci/${FN_REPO_NAME}.git"
             git clone -b zmqOop $FN_GITHUB_URL
             
-            fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn            
+            return
+            
+            fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn   
+
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
 
             fn update function $FN_APP_NAME review_consumer_fn --memory 512 --timeout 120
             fn update function $FN_APP_NAME review_producer_fn --memory 512 --timeout 120 
+
+             
 
 #Create Compute Instance for running dockerized Kafka Sink Connector for Oci Fn 
         SSH_PUBLIC_KEY_LOCATION="/Users/mraleras/sshkeypair1.key.pub" # Use your ssh public key file location here
@@ -288,6 +324,7 @@
                                 --image-id ${ORALCE_LINUX_IMAGE_OCID} \
                                 --ssh-authorized-keys-file "${SSH_PUBLIC_KEY_LOCATION}" \
                                 --subnet-id ${OCI_SUBNET_1} \
+                                --region ${OCI_CURRENT_REGION} \
                                 --availability-domain "${AD}" \
                                 --wait-for-state RUNNING \
                                 --query "data.id" \
@@ -295,9 +332,11 @@
         #Get the Public IP
         COMPUTE_PUBLIC_IP=$(oci compute instance list-vnics \
             --instance-id "${COMPUTE_OCID}" \
+            --region ${OCI_CURRENT_REGION} \
             --query 'data[0]."public-ip"' \
             --raw-output)
-        echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_PUBLIC_IP     
+        echo 'The OCI Oracle Linux Compute Instance IP is' $COMPUTE_PUBLIC_IP    
+
         
         #Create Dynamic group and policy for your above instance to call consumer function review_consumer_fn
         MATCHING_RULE_FOR_DG_CI="ANY {instance.id = '${COMPUTE_OCID}'}"
@@ -368,7 +407,7 @@
        oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME}
        oci os object list -bn ${BAD_REVIEWS_BUCKET_NAME}
 
-       exit
+       return
 
 #Delete all resources in cmpt. 
     OCID_CMPT_STACK=$(oci resource-manager stack create-from-compartment  --compartment-id ${OCI_TENANCY_OCID} --config-source-compartment-id ${OCI_CMPT_ID} \
@@ -377,13 +416,10 @@
     echo $OCID_CMPT_STACK
 
     oci resource-manager job create-destroy-job  --execution-plan-strategy 'AUTO_APPROVED'  --stack-id ${OCID_CMPT_STACK} --wait-for-state SUCCEEDED
+    # twice since it fails sometimes and running it twice is idempotent
     oci resource-manager job create-destroy-job  --execution-plan-strategy 'AUTO_APPROVED'  --stack-id ${OCID_CMPT_STACK} --wait-for-state SUCCEEDED
+
     oci resource-manager stack delete --stack-id ${OCID_CMPT_STACK} --force --wait-for-state DELETED
-
-
-
-    #delete IAM resources which are out of compartment hierachy like policies, dynamic groups, user and user-group explicitly since they are not deleted with Terraform stack
-    # oci iam auth-token delete --auth-token-id ${OCI_FN_USER_AUTH_TOKEN_OCID} --user-id ${OCI_FN_USER_ID} --force
 
     oci iam policy delete --policy-id ${OCI_FN_DG_AND_FAAS_POLICY_ID} --force --wait-for-state INACTIVE
     oci iam policy delete --policy-id ${OCI_FN_USERGROUP_POLICY_ID} --force --wait-for-state INACTIVE
@@ -392,7 +428,7 @@
     oci iam dynamic-group delete --dynamic-group-id ${OCI_FN_DG_ID} --force --wait-for-state DELETED
     oci iam dynamic-group delete --dynamic-group-id ${DG_CI_ID} --force --wait-for-state DELETED
 
-    oci iam group remove-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --region ${OCI_HOME_REGION} 
+    oci iam group remove-user --group-id ${OCI_FN_USERGROUP_ID} --user-id ${OCI_FN_USER_ID} --force 
     oci iam user delete --user-id ${OCI_FN_USER_ID} --force --wait-for-state INACTIVE
     oci iam group delete --group-id ${OCI_FN_USERGROUP_ID} --force --wait-for-state INACTIVE
 
