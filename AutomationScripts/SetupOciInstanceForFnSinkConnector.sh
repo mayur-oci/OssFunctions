@@ -82,7 +82,7 @@
 
     #tail -f /tmp/kafka.log
 
-    sleep 30
+    sleep 50
 
     curl -X DELETE http://localhost:8082/connectors/$FN_CONNECTOR_NAME
     echo "Connector $FN_CONNECTOR_NAME deleted"
@@ -107,5 +107,5 @@
    curl localhost:8082/connectors/${FN_CONNECTOR_NAME}/status | jq
 
    return
-   
+
 

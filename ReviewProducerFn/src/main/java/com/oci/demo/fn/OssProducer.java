@@ -38,7 +38,8 @@ public class OssProducer {
             producer.flush();
             producer.close();
         } catch (Exception e) {
-            System.err.println("Error: exception " + e);
+            System.err.println("Error: exception " + e + "stacktrace is ");
+            e.printStackTrace();
             return false;
         }
 
@@ -46,7 +47,7 @@ public class OssProducer {
     }
 
     private static Properties getKafkaOssProperties() {
-        setDefaultConfigsIfNeeded();
+        // setDefaultConfigsIfNeeded();
         Properties properties = new Properties();
         properties.put("bootstrap.servers", bootstrapServers);
         properties.put("security.protocol", "SASL_SSL");
@@ -60,9 +61,11 @@ public class OssProducer {
                 + streamPoolId + "\" "
                 + "password=\""
                 + authToken + "\";";
+
         properties.put("sasl.jaas.config", value);
         properties.put("retries", 5); // retries on transient errors and load balancing disconnection
         properties.put("max.request.size", 1024 * 1024); // limit request size to 1MB
+        System.err.println("Properties for Kafka are : \n "+ properties.toString());
         return properties;
     }
 

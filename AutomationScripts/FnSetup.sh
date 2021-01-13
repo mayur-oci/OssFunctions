@@ -32,8 +32,8 @@
           out "OCI_TENANCY_OCID=${OCI_TENANCY_OCID}"
 
           echo Sleeping for some seconds, we need sleep since sometimes '--wait-for-state ACTIVE' for create compartment command does not work as expected.
-          sleep 80
-          
+          sleep 120
+          oci iam compartment get -c $OCI_CMPT_ID
              
 #Create OCI streampool and stream(aka Kafka Topic) in it
           OCI_STREAM_POOL_NAME=REVIEWS_STREAM_POOL
@@ -45,7 +45,11 @@
                          --region $OCI_CURRENT_REGION  --stream-pool-id ${OCI_STREAM_POOL_ID} --wait-for-state ACTIVE --query "data.id" --raw-output)
           OCI_CONNECT_HARNESS_ID=$(oci streaming admin connect-harness create --region ${OCI_CURRENT_REGION} -c ${OCI_CMPT_ID} \
                           --name ConnectHarnessForFnSink --wait-for-state ACTIVE --query "data.id" --raw-output)
-
+          
+          if [ "$OCI_STREAM_ID" == "" -o "$OCI_CONNECT_HARNESS_ID" == "" ];then
+            echo "Could not create stream"
+            return
+          fi
 
           out "OCI_STREAM_POOL_ID=${OCI_STREAM_POOL_ID}"
           out "OCI_STREAM_ID=${OCI_STREAM_ID}"
@@ -60,6 +64,11 @@
           BAD_REVIEWS_BUCKET_OCID=$(oci os bucket create --name ${BAD_REVIEWS_BUCKET_NAME} -c $OCI_CMPT_ID --region $OCI_CURRENT_REGION --raw-output --query "data.id")
           out "GOOD_REVIEWS_BUCKET_OCID=${GOOD_REVIEWS_BUCKET_OCID}"
           out "BAD_REVIEWS_BUCKET_OCID=${BAD_REVIEWS_BUCKET_OCID}"
+
+          if [ "$GOOD_REVIEWS_BUCKET_OCID" == "" -o "$BAD_REVIEWS_BUCKET_OCID" == "" ];then
+            echo "Could not create buckets"
+            return
+          fi
 
 #Create Dynamic group and policy for your function resources and for allowing FaaS service(hence your function) to access
           # 1- docker repo for getting function code and
@@ -384,13 +393,16 @@
                       -o "StrictHostKeyChecking no" \
                       "sudo sh ~/kafkaConnector.sh"  
 
+
+        return
+
         # If you want to see Fn Kafka Sink connector in action, you tail its logs as follows
         # ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
         #               -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
         #               -o "StrictHostKeyChecking no" \
         #               'tail -f /tmp/kafka.log' &
               
-        rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
+        # rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
         sleep 20 
 
 #Invoke Consumer Function
