@@ -282,13 +282,13 @@
           #Configs for the functions
             #Configs for Kafka Producer function    
             fn config app $FN_APP_NAME OCI_TENANCY_NAME $OCI_TENANCY_NAME
-            fn config app $FN_APP_NAME OCI_OSS_KAFKA_BOOTSTRAP_SERVERS "streaming.${OCI_CURRENT_REGION}.oci.oraclecloud.com:9092" # again depends on OCI region where your stream is.
+            fn config app $FN_APP_NAME OCI_OSS_KAFKA_BOOTSTRAP_SERVERS "cell-1.streaming.${OCI_CURRENT_REGION}.oci.oraclecloud.com:9092" 
             fn config app $FN_APP_NAME STREAM_POOL_NAME $OCI_STREAM_POOL_NAME
             fn config app $FN_APP_NAME REVIEWS_STREAM_OR_TOPIC_NAME $OCI_STREAM_NAME
             fn config app $FN_APP_NAME STREAM_POOL_OCID $OCI_STREAM_POOL_ID
             fn config app $FN_APP_NAME OCI_USERNAME $OCI_FN_USERNAME
             #TODO use OCI secrets instead of config for auth token
-            fn config app $FN_APP_NAME OCI_AUTH_TOKEN \"$OCI_FN_USER_AUTH_TOKEN\" 
+            fn config app $FN_APP_NAME OCI_AUTH_TOKEN "${OCI_FN_USER_AUTH_TOKEN}" 
 
             #Configs for Kafka Consumer function
             fn config app $FN_APP_NAME OCI_OBJECT_STORAGE_NAMESPACE $OCI_TENANCY_NAME
@@ -404,6 +404,8 @@
               
         # rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
         sleep 20 
+
+        return 
 
 #Invoke Consumer Function
         echo -n '{"reviewId": "REV_100", "time": 200010000000000, "productId": "PRODUCT_100", "reviewContent": "review content"}' | DEBUG=1 fn -v invoke $FN_APP_NAME review_consumer_fn 
