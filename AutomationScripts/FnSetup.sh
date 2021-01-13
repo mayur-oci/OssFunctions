@@ -412,8 +412,8 @@
 
 #Checking if objects are created in the buckets
        sleep 20
-       oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME}
-       oci os object list -bn ${BAD_REVIEWS_BUCKET_NAME}
+       oci os object list -bn ${GOOD_REVIEWS_BUCKET_NAME} --region ${OCI_CURRENT_REGION}
+       oci os object list -bn ${BAD_REVIEWS_BUCKET_NAME} --region ${OCI_CURRENT_REGION}
 
        return
 
