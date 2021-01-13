@@ -303,8 +303,6 @@
             FN_GITHUB_URL="https://github.com/mayur-oci/${FN_REPO_NAME}.git"
             git clone -b zmqOop $FN_GITHUB_URL
             
-            return
-            
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewConsumerFn   
 
             fn -v deploy --app $FN_APP_NAME --no-bump ./$FN_REPO_NAME/ReviewProducerFn
@@ -393,9 +391,6 @@
                       -o "StrictHostKeyChecking no" \
                       "sudo sh ~/kafkaConnector.sh"  
 
-
-        return
-
         # If you want to see Fn Kafka Sink connector in action, you tail its logs as follows
         # ssh -i ${SSH_PRIVATE_KEY_LOCATION} \
         #               -n opc@${COMPUTE_PUBLIC_IP} -o ServerAliveInterval=60 \
@@ -403,7 +398,6 @@
         #               'tail -f /tmp/kafka.log' &
               
         # rm -rf env.json kafkaConnector.sh SetupOciInstanceForFnSinkConnector.sh ./${FN_REPO_NAME} 
-        sleep 20 
 
         return 
 
